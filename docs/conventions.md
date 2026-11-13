@@ -685,7 +685,8 @@ and every entry point checks them the same way.
   Asking again with a session X has refused is the fastest way to lose the
   account.
 - **The gap and the caps are settings with bounds**: `read_gap_seconds` (5 by
-  default), `reads_per_hour` (30) and `reads_per_day` (200), whole numbers.
+  default, 1 to 3600), `reads_per_hour` (30, 1 to 60) and `reads_per_day`
+  (200, 1 to 500), whole numbers.
   They apply to every label alike: one budget per label, whoever calls. A
   setting can lower what a cautious user allows, and its bounds keep a typo
   from turning the pacing off.

@@ -410,9 +410,9 @@ variable, and an option or setting wins over the variable too.
 | `emoji`            | —                    | —                          | Hermes only: the emoji shown beside each toolset, by toolset name (`""` for none)                                   |
 | `require_plugins`  | —                    | —                          | Hermes only: the plugins that must be loaded; while one is not, every write is refused before it is approved        |
 | `state_dir`        | `--state-dir`        | `X_TOOLS_STATE_DIR`        | every reading account's state and the engine; default `$XDG_STATE_HOME/x-tools`, else `~/.local/state/x-tools`      |
-| `read_gap_seconds` | `--read-gap-seconds` | `X_TOOLS_READ_GAP_SECONDS` | the least time between two reads of X by one account; default 5                                                     |
-| `reads_per_hour`   | `--reads-per-hour`   | `X_TOOLS_READS_PER_HOUR`   | the most reads of X by one account in an hour; default 30                                                           |
-| `reads_per_day`    | `--reads-per-day`    | `X_TOOLS_READS_PER_DAY`    | the most reads of X by one account in 24 hours; default 200                                                         |
+| `read_gap_seconds` | `--read-gap-seconds` | `X_TOOLS_READ_GAP_SECONDS` | the least time between two reads of X by one account; default 5, 1 to 3600                                          |
+| `reads_per_hour`   | `--reads-per-hour`   | `X_TOOLS_READS_PER_HOUR`   | the most reads of X by one account in an hour; default 30, 1 to 60                                                  |
+| `reads_per_day`    | `--reads-per-day`    | `X_TOOLS_READS_PER_DAY`    | the most reads of X by one account in 24 hours; default 200, 1 to 500                                               |
 | `account_only`     | `--account-only`     | `X_TOOLS_ACCOUNT_ONLY`     | reads go only to the reading account, never to FxTwitter; off by default                                            |
 
 `X_TOOLS_GRANT_KEY` is a variable only, never a flag or a plugin
