@@ -1,10 +1,14 @@
 import { isAbortError, isToolError, ToolError } from "../core"
+import { isLabel } from "../core/x/labels"
 import { parseStateDirOnly } from "../entry/settings"
 import { PROJECT } from "../project"
 import { EXIT_FAILED, EXIT_USAGE, type CommandIo } from "./command-io"
 
 /** The flag that names the state directory. */
 export const STATE_DIR_FLAG = "--state-dir"
+
+/** The flag that names the reading account. */
+export const ACCOUNT_FLAG = "--account"
 
 /** The flags a command takes: those with a value (`--flag value` or `--flag=value`) and the switches. */
 export type FlagParserSpec<V extends string = string, S extends string = string> = {
@@ -44,6 +48,20 @@ const UNEXPECTED_MESSAGE = "Unexpected error; the command failed."
 /** The error for a mistake in the command line. */
 export function usageError(message: string): ToolError {
   return new ToolError("invalid_argument", message)
+}
+
+/**
+ * The label a command was given, checked without echoing it: a person may
+ * paste the cookies into `--account` by mistake, and a message must not
+ * repeat them.
+ */
+export function commandLabel(value: string): string {
+  if (!isLabel(value)) {
+    throw usageError(
+      'Invalid label: a label must be 1 to 24 lowercase letters, digits and "_", starting and ending with a letter or digit.',
+    )
+  }
+  return value
 }
 
 /** Writes one line on standard error, led by the program's name. */
@@ -120,4 +138,9 @@ export function parseCommandStateDir(argv: string[], io: CommandIo): CommandStat
   const flag = values[STATE_DIR_FLAG]
   const args = flag === undefined ? rest : [`${STATE_DIR_FLAG}=${flag}`, ...rest]
   return { stateDir: parseStateDirOnly(args, io.env, io.profile).state_dir, fromFlag: flag !== undefined }
+}
+
+/** The state directory for a command that has already taken `--state-dir` out of its arguments: the flag's value when given, else as `parseCommandStateDir` resolves it. */
+export function resolveCommandStateDir(flagValue: string | undefined, io: CommandIo): string {
+  return parseCommandStateDir(flagValue === undefined ? [] : [STATE_DIR_FLAG, flagValue], io).stateDir
 }
