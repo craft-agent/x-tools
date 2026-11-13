@@ -177,6 +177,17 @@ settings only to the MCP server, so they list every skill whatever the
 settings select. OpenCode V1 registers no skills, and its copied skills are
 all listed too.
 
+### Account (`account`)
+
+On by default. Reports what a reading account needs, from local state only.
+
+| Tool             | What it does                                                                                             | Class |
+| ---------------- | -------------------------------------------------------------------------------------------------------- | ----- |
+| `x_account_read` | the engine, each reading account's cookies, X's remembered verdicts and reads used, and what to run next | read  |
+
+It never contacts X or FxTwitter and costs no read. When something needs a
+person, it returns the one command to run.
+
 ### Grants (`grants`)
 
 Off by default. Delegates bounded writes for jobs where no person can answer.
@@ -241,6 +252,26 @@ label's cookie file (mode 600), which the login command writes from standard
 input. The value is `auth_token=…; ct0=…`, copied from a browser signed in to
 x.com as the reading account. Never pass it as an argument. Codex forwards no
 variable whose name depends on a label, so use the file there.
+
+### Setting up
+
+These are commands a person runs, never tools. `x-tools-cli` is the package's
+command line (`npx -y -p @craftsamo/x-tools@<version> x-tools-cli …`), and
+each takes `--state-dir <path>` when the state root is not the default.
+
+```sh
+x-tools-cli engine install             # build the engine's venv with uv
+x-tools-cli engine status              # is the engine there, on the pinned versions?
+x-tools-cli login [--account <label>]  # store the cookies, read from standard input
+x-tools-cli remove --account <label>   # delete a reading account's local state
+```
+
+`login` asks for the cookie string without echoing it on a terminal, or reads
+it piped, checks that both `auth_token` and `ct0` are there and writes the
+label's cookie file; it sends nothing to X, so the first read checks the
+cookies. With `X_TOOLS_COOKIES_<LABEL>` set it reads nothing and stores
+nothing. `remove` asks you to type the label back, or takes `--yes` where
+there is no terminal; the variable, if you set one, stays yours to unset.
 
 ## Adding a tool
 
