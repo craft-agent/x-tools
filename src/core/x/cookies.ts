@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto"
 import { lstat, readFile } from "node:fs/promises"
 import type { Stats } from "node:fs"
 import { ToolError } from "../errors"
@@ -13,8 +14,14 @@ export type Cookies = { source: CookieSource; value: string }
 /** Permission bits of group and others; a cookie file may have none of them. */
 const GROUP_OTHER_BITS = 0o077
 
+/** The cookie that is the session. */
+const AUTH_TOKEN = "auth_token"
+
 /** The cookies the session needs: `auth_token` is the session, `ct0` its CSRF token. */
-const SESSION_COOKIES = ["auth_token", "ct0"] as const
+const SESSION_COOKIES = [AUTH_TOKEN, "ct0"] as const
+
+/** How many hex characters of the SHA-256 the fingerprint keeps. */
+const FINGERPRINT_LENGTH = 16
 
 /** What every cookie value found in a text is replaced with. */
 const MASK = "[masked]"
@@ -44,6 +51,20 @@ function parseCookiePairs(value: string): Map<string, string> {
 export function hasCookiePair(value: string): boolean {
   const pairs = parseCookiePairs(value)
   return SESSION_COOKIES.every((name) => (pairs.get(name) ?? "") !== "")
+}
+
+/**
+ * The identity of the session in `value`: the first 16 hex characters of the
+ * SHA-256 of its `auth_token` value (UTF-8), the same string the bridge
+ * reports as `fingerprint`. It identifies the session without revealing it.
+ * Throws `unauthenticated`, never naming the value, without an `auth_token`.
+ */
+export function cookieFingerprint(value: string): string {
+  const token = parseCookiePairs(value).get(AUTH_TOKEN) ?? ""
+  if (token === "") {
+    throw new ToolError("unauthenticated", `The cookies do not hold ${AUTH_TOKEN}.`)
+  }
+  return createHash("sha256").update(token, "utf8").digest("hex").slice(0, FINGERPRINT_LENGTH)
 }
 
 /**

@@ -84,7 +84,13 @@ describe("stateRoot and labelPaths", () => {
 
   test("labelPaths keeps the label's files in accounts/<label>", () => {
     const dir = join(tempDir, "state", "accounts", "work")
-    expect(labelPaths(join(tempDir, "state"), "work")).toEqual({ label: "work", dir, cookies: join(dir, "cookies") })
+    expect(labelPaths(join(tempDir, "state"), "work")).toEqual({
+      label: "work",
+      dir,
+      cookies: join(dir, "cookies"),
+      lock: join(dir, "read.lock"),
+      pacing: join(dir, "pacing.json"),
+    })
   })
 
   test("labelPaths refuses a bad label", () => {
