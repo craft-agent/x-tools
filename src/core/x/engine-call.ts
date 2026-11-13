@@ -133,14 +133,7 @@ function replyFailure(result: ExecResult, cookies: string): ToolError {
  * from the runner, with the cookies masked out of their messages.
  */
 export async function callEngine(options: EngineCallOptions): Promise<EngineReply> {
-  const state = await readEngineState(options.stateDir)
-  if (state.status !== "ready") {
-    throw new ToolError(
-      "not_found",
-      "The engine is not installed or does not match this release; run engine install.",
-      { details: { action: "engine_install", engine_status: state.status } },
-    )
-  }
+  await requireEngine(options.stateDir)
 
   const { dir, python } = enginePaths(options.stateDir)
   const request = JSON.stringify({
@@ -170,6 +163,21 @@ export async function callEngine(options: EngineCallOptions): Promise<EngineRepl
   const reply = result.code === 0 ? parseReply(result.stdout.trim()) : undefined
   if (reply) return reply
   throw replyFailure(result, options.cookies)
+}
+
+/**
+ * Fails with `not_found` and `details.action: "engine_install"` unless the
+ * engine under `stateDir` is `ready`; reads files only and starts nothing.
+ */
+export async function requireEngine(stateDir: string): Promise<void> {
+  const state = await readEngineState(stateDir)
+  if (state.status !== "ready") {
+    throw new ToolError(
+      "not_found",
+      "The engine is not installed or does not match this release; run engine install.",
+      { details: { action: "engine_install", engine_status: state.status } },
+    )
+  }
 }
 
 /** The error text without its final full stop, so a message that ends in it reads once. */
