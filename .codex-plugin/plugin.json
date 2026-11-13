@@ -26,7 +26,17 @@
         "X_TOOLS_GRANTS_DIR",
         "X_TOOLS_STATE_DIR",
         "X_TOOLS_GRANT_KEY",
-        "XDG_STATE_HOME"
+        "XDG_STATE_HOME",
+        "HTTP_PROXY",
+        "HTTPS_PROXY",
+        "ALL_PROXY",
+        "NO_PROXY",
+        "http_proxy",
+        "https_proxy",
+        "all_proxy",
+        "no_proxy",
+        "SSL_CERT_FILE",
+        "SSL_CERT_DIR"
       ]
     }
   }

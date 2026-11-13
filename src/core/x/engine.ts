@@ -3,7 +3,7 @@ import { access, readdir, readFile, stat } from "node:fs/promises"
 import { join } from "node:path"
 import { ToolError, isToolError } from "../errors"
 import type { ExecResult } from "../exec"
-import { exitFailure, run, type RunOptions } from "../runner"
+import { exitFailure, NETWORK_PASS, run, type RunOptions } from "../runner"
 import { stateRoot } from "./labels"
 import { isMissingPath } from "./missing-path"
 import { ensurePrivateDir } from "./private-dir"
@@ -70,16 +70,7 @@ const UV_PASS = [
   "UV_NATIVE_TLS",
   "XDG_CACHE_HOME",
   "XDG_DATA_HOME",
-  "HTTP_PROXY",
-  "HTTPS_PROXY",
-  "ALL_PROXY",
-  "NO_PROXY",
-  "http_proxy",
-  "https_proxy",
-  "all_proxy",
-  "no_proxy",
-  "SSL_CERT_FILE",
-  "SSL_CERT_DIR",
+  ...NETWORK_PASS,
 ] as const
 
 const PYVENV_CONFIG = "pyvenv.cfg"

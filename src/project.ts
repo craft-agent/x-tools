@@ -1,4 +1,5 @@
 import type { OptionSpec } from "./core"
+import { NETWORK_PASS } from "./core/runner"
 
 /** What makes this package itself; a project made from the starter sets these once (the setup script does). */
 export const PROJECT = {
@@ -17,5 +18,5 @@ export const PROJECT = {
   /** The package's own settings, which the tools themselves read: each snake_case name and its type, with bounds when it needs them. */
   options: { state_dir: "path" } as Readonly<Record<string, OptionSpec>>,
   /** The environment variables the tools read besides the settings, which Codex forwards to the server after them. */
-  toolVariables: ["XDG_STATE_HOME"] as readonly string[],
+  toolVariables: ["XDG_STATE_HOME", ...NETWORK_PASS] as readonly string[],
 } as const

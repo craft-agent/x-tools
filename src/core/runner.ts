@@ -5,6 +5,19 @@ import { exec, type ExecResult } from "./exec"
 
 /** The variables every program gets when they are set and not empty: enough to find itself and its files. */
 const BASE_PASS = ["PATH", "HOME", "TMPDIR", "LANG", "LC_ALL", "LC_CTYPE"] as const
+/** The variables a program that reaches the network takes, so it goes through the user's proxy and trusts their certificates. */
+export const NETWORK_PASS = [
+  "HTTP_PROXY",
+  "HTTPS_PROXY",
+  "ALL_PROXY",
+  "NO_PROXY",
+  "http_proxy",
+  "https_proxy",
+  "all_proxy",
+  "no_proxy",
+  "SSL_CERT_FILE",
+  "SSL_CERT_DIR",
+] as const
 /** Always set, so no program waits on a person and its output parses the same everywhere. */
 const FIXED_ENV = { NO_COLOR: "1", TERM: "dumb" } as const
 /** The code point budget of the program's own words in a failure message, including an ellipsis when cut. */
