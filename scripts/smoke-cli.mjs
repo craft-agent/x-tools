@@ -1,6 +1,9 @@
 import { Client } from "@modelcontextprotocol/sdk/client/index.js"
 import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js"
 import { spawnSync } from "node:child_process"
+import { mkdtempSync, readdirSync, rmSync } from "node:fs"
+import { tmpdir } from "node:os"
+import { join } from "node:path"
 import { fileURLToPath } from "node:url"
 
 const CLI = fileURLToPath(new URL("../dist/cli.js", import.meta.url))
@@ -8,19 +11,27 @@ const SERVER = fileURLToPath(new URL("../dist/mcp.js", import.meta.url))
 const EXIT_FAILED = 1
 const EXIT_USAGE = 2
 const UNKNOWN_TOOL = "unknown_nonexistent_read"
+const ACCOUNT_READ = "x_account_read"
+const stateDir = mkdtempSync(join(tmpdir(), "cli-smoke-"))
 
 function expect(condition, message) {
   if (!condition) throw new Error(message)
 }
 
 function cli(args, input = "") {
-  return spawnSync(process.execPath, [CLI, ...args], { encoding: "utf8", input, stdio: "pipe" })
+  return spawnSync(process.execPath, [CLI, ...args, "--state-dir", stateDir], {
+    encoding: "utf8",
+    input,
+    stdio: "pipe",
+  })
 }
 
 /** The tool names the MCP server lists with the given settings; it draws on the same registry as the CLI. */
 async function mcpToolNames(args) {
   const client = new Client({ name: "smoke", version: "0.0.0" })
-  await client.connect(new StdioClientTransport({ command: process.execPath, args: [SERVER, ...args] }))
+  await client.connect(
+    new StdioClientTransport({ command: process.execPath, args: [SERVER, ...args, "--state-dir", stateDir] }),
+  )
   try {
     return (await client.listTools()).tools.map((tool) => tool.name)
   } finally {
@@ -34,6 +45,10 @@ async function listsTheServersTools() {
     const run = cli(["list", ...settings])
     expect(run.status === 0, `Expected exit 0 for ${label}, got ${run.status}: ${run.stderr}`)
     const listed = JSON.parse(run.stdout)
+    expect(
+      listed.some((tool) => tool.id === ACCOUNT_READ && tool.class === "read"),
+      `Expected ${label} to include ${ACCOUNT_READ} as a read tool, got ${run.stdout}`,
+    )
     const expected = await mcpToolNames(settings)
     expect(
       JSON.stringify(listed.map((tool) => tool.id)) === JSON.stringify(expected),
@@ -47,6 +62,20 @@ async function listsTheServersTools() {
     }
     console.log(`${label} gives the ${listed.length} tools the MCP server lists.`)
   }
+}
+
+function readsEmptyAccounts() {
+  for (const settings of [[], ["--read-only"]]) {
+    const run = cli(["run", ACCOUNT_READ, "--cwd", process.cwd(), ...settings], "{}")
+    expect(run.status === 0, `Expected ${ACCOUNT_READ} to succeed, got ${run.status}: ${run.stdout}${run.stderr}`)
+    const { result } = JSON.parse(run.stdout)
+    expect(
+      Array.isArray(result?.accounts) && result.accounts.length === 0 && result.engine?.status === "missing",
+      `Expected no accounts and a missing engine from an empty state directory, got ${run.stdout}`,
+    )
+  }
+  expect(readdirSync(stateDir).length === 0, "Account reads must not create state")
+  console.log(`${ACCOUNT_READ} returns no accounts and a missing engine from an empty state directory.`)
 }
 
 function rejectsAnUnknownTool() {
@@ -68,9 +97,12 @@ function rejectsConfirm() {
 
 try {
   await listsTheServersTools()
+  readsEmptyAccounts()
   rejectsAnUnknownTool()
   rejectsConfirm()
 } catch (error) {
   console.error(error)
-  process.exit(1)
+  process.exitCode = 1
+} finally {
+  rmSync(stateDir, { recursive: true, force: true })
 }
