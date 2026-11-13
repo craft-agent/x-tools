@@ -11,7 +11,14 @@ import {
 } from "../core"
 import { PROJECT } from "../project"
 import { PROJECT_PROFILE, type EntryProfile } from "./profile"
-import { defaultStateDir, homeOf, stateDirSettings, type Environment, type StateDirSettings } from "./state-dir"
+import {
+  STATE_DIR_OPTION,
+  defaultStateDir,
+  homeOf,
+  stateDirSettings,
+  type Environment,
+  type StateDirSettings,
+} from "./state-dir"
 
 /** Who asks the person before an administrative tool acts: the harness, or the tool through the client's form. */
 export type ConfirmMode = "harness" | "elicitation"
@@ -377,6 +384,29 @@ export function parseTargetSettings(
     grants: grantsFromText(flags, env, profile),
     ...stateDirSettings(options, env, profile),
   }
+}
+
+/**
+ * Reads the state directory from the command line and environment of a
+ * command that takes no other setting (`engine`): any other flag is
+ * `invalid_argument`, and no other setting's variable is read, so one that is
+ * wrong cannot stop the command.
+ */
+export function parseStateDirOnly(
+  argv: string[],
+  env: Record<string, string | undefined>,
+  profile: EntryProfile = PROJECT_PROFILE,
+): StateDirSettings {
+  const only: EntryProfile = {
+    ...profile,
+    options: Object.fromEntries(Object.entries(profileOptions(profile)).filter(([name]) => name === STATE_DIR_OPTION)),
+  }
+  const flags = readFlags(argv, only)
+  const other = Object.keys(flags).find((name) => name !== STATE_DIR_OPTION)
+  if (other !== undefined) {
+    throw new ToolError("invalid_argument", `Unknown option "${settingOptions(only)[other]!.flag}".`)
+  }
+  return stateDirSettings(optionsFrom(flags, env, only), env, only)
 }
 
 /**

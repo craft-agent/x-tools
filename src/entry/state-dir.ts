@@ -3,6 +3,9 @@ import { isAbsolute, join } from "node:path"
 import type { ToolOptions } from "../core"
 import type { EntryProfile } from "./profile"
 
+/** The name of the state directory setting among the package's own options. */
+export const STATE_DIR_OPTION = "state_dir"
+
 /** The environment a setting is read from. */
 export type Environment = Record<string, string | undefined>
 
@@ -34,6 +37,6 @@ export function stateDirContext(settings: StateDirSettings): StateDirContext {
  * filling in the default when it is unset. Creates nothing and checks no real path.
  */
 export function stateDirSettings(options: ToolOptions, env: Environment, profile: EntryProfile): StateDirSettings {
-  const given = options.state_dir
+  const given = options[STATE_DIR_OPTION]
   return { state_dir: typeof given === "string" ? given : defaultStateDir(env, profile) }
 }
