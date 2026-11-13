@@ -57,12 +57,13 @@ function v1Tool(
   t: Translator,
   options: ToolOptions,
   grants: GrantContext,
+  stateDir: string,
 ): V1Tool {
   return {
     description: `${spec.description}${describeArguments(spec)}`,
     args: spec.input.shape,
     async execute(args: unknown, context: V1ToolContext): Promise<string> {
-      const ctx = { cwd: workingDir(context), ownDir, options, grants, signal: context.abort }
+      const ctx = { cwd: workingDir(context), ownDir, options, grants, stateDir, signal: context.abort }
       let pin: string | undefined
       if (needsPermission(spec)) {
         const approval = await approvalOf(spec, args, ctx, DESCRIBE_TIMEOUT_MS, t)
@@ -121,7 +122,14 @@ export function createV1Server(specs: ToolSpec[], deps: PluginDeps = {}): OpenCo
     const tool: V1Hooks["tool"] = {}
     const selected = selectedTools(specs, options, deps)
     for (const spec of selected.specs) {
-      tool[spec.id] = v1Tool(spec, deps.ownDir, selected.translator, selected.options, selected.grants)
+      tool[spec.id] = v1Tool(
+        spec,
+        deps.ownDir,
+        selected.translator,
+        selected.options,
+        selected.grants,
+        selected.stateDir,
+      )
     }
     const personOnly = personOnlyIds(selected.specs)
     return personOnly.length > 0 ? { tool, config: askPersonOnlyConfig(personOnly) } : { tool }

@@ -72,6 +72,8 @@ export type ToolContext = {
   confirm?(request: ConfirmRequest): Promise<boolean>
   /** Grants, for a call no person can be asked about; absent or not `unattended`, nothing changes. */
   grants?: GrantContext
+  /** Where every reading account's state and the engine live: an absolute path the entry point resolved. */
+  stateDir?: string
 }
 
 /** What a grant over a tool can limit: a whole-number ceiling, a yes/no, or a set of allowed values. */

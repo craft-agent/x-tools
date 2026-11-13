@@ -2,7 +2,7 @@ import { describe, expect, test } from "bun:test"
 import { PROJECT } from "../project"
 import type { EntryProfile } from "./profile"
 import { forwardedVariables, parseSettings, parseToolSettings, settingVariables } from "./settings"
-import { DEFAULT_GRANTS, failure, profile } from "./settings.testing"
+import { DEFAULT_GRANTS, DEFAULT_STATE, failure, profile } from "./settings.testing"
 
 const parse = (argv: string[], env: Record<string, string | undefined> = {}) => parseSettings(argv, env, profile)
 const parseTool = (argv: string[], env: Record<string, string | undefined> = {}) =>
@@ -19,6 +19,7 @@ describe("settingVariables", () => {
       "DEMO_UNATTENDED",
       "DEMO_GRANTS_DIR",
       "DEMO_NOTE_TEXT",
+      "DEMO_STATE_DIR",
     ])
   })
 
@@ -49,7 +50,7 @@ describe("forwardedVariables", () => {
 
 describe("parseSettings", () => {
   test("defaults to the harness confirming and no other setting", () => {
-    expect(parse([])).toEqual({ confirm: "harness", options: {}, grants: DEFAULT_GRANTS })
+    expect(parse([])).toEqual({ confirm: "harness", options: {}, grants: DEFAULT_GRANTS, ...DEFAULT_STATE })
   })
 
   test("reads each flag", () => {
@@ -73,6 +74,7 @@ describe("parseSettings", () => {
       confirm: "elicitation",
       options: {},
       grants: DEFAULT_GRANTS,
+      ...DEFAULT_STATE,
     })
   })
 
@@ -87,6 +89,7 @@ describe("parseSettings", () => {
       confirm: "elicitation",
       options: {},
       grants: DEFAULT_GRANTS,
+      ...DEFAULT_STATE,
     })
   })
 
@@ -107,6 +110,7 @@ describe("parseSettings", () => {
       confirm: "elicitation",
       options: {},
       grants: DEFAULT_GRANTS,
+      ...DEFAULT_STATE,
     })
   })
 
@@ -159,6 +163,7 @@ describe("parseSettings", () => {
       read_only: true,
       options: {},
       grants: DEFAULT_GRANTS,
+      ...DEFAULT_STATE,
     })
   })
 
@@ -167,6 +172,7 @@ describe("parseSettings", () => {
       confirm: "harness",
       options: {},
       grants: DEFAULT_GRANTS,
+      ...DEFAULT_STATE,
     })
   })
 
@@ -220,7 +226,7 @@ describe("parseSettings", () => {
 
 describe("parseToolSettings", () => {
   test("reads the tool settings and gives no confirm setting", () => {
-    expect(parseTool([])).toEqual({ options: {}, grants: DEFAULT_GRANTS })
+    expect(parseTool([])).toEqual({ options: {}, grants: DEFAULT_GRANTS, ...DEFAULT_STATE })
     expect(parseTool(["--toolsets=gamma", "--read-only", "--tools", "a"], { DEMO_EXCLUDE_TOOLS: "b" })).toEqual({
       toolsets: ["gamma"],
       read_only: true,
@@ -228,6 +234,7 @@ describe("parseToolSettings", () => {
       exclude_tools: ["b"],
       options: {},
       grants: DEFAULT_GRANTS,
+      ...DEFAULT_STATE,
     })
   })
 
@@ -237,6 +244,6 @@ describe("parseToolSettings", () => {
   })
 
   test("ignores DEMO_CONFIRM, even a bad one", () => {
-    expect(parseTool([], { DEMO_CONFIRM: "ask" })).toEqual({ options: {}, grants: DEFAULT_GRANTS })
+    expect(parseTool([], { DEMO_CONFIRM: "ask" })).toEqual({ options: {}, grants: DEFAULT_GRANTS, ...DEFAULT_STATE })
   })
 })

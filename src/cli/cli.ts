@@ -18,6 +18,7 @@ import { errorBody } from "../entry/errors"
 import { approvalOf, checkPin } from "../entry/pin"
 import { PROJECT_PROFILE, type EntryProfile } from "../entry/profile"
 import { parseTargetSettings, parseToolSettings, promptLanguage, type ToolEntrySettings } from "../entry/settings"
+import { stateDirContext } from "../entry/state-dir"
 import { visible } from "../entry/visible"
 import { promptTranslator, promptWords } from "../entry/words"
 import { PROJECT } from "../project"
@@ -58,7 +59,7 @@ export type CliIo = {
 }
 
 /** What a call's context takes from the command line: the package's own settings and the grants' context. */
-type CallSettings = Pick<ToolEntrySettings, "options" | "grants">
+type CallSettings = Pick<ToolEntrySettings, "options" | "grants" | "state_dir">
 
 type Command =
   | { name: "list"; selected: ToolSpec[] }
@@ -97,6 +98,7 @@ function parseCommand(argv: string[], io: Pick<CliIo, "specs" | "env" | "profile
       selected: selectTools(io.specs, settings, profile.toolsets),
       options: settings.options,
       grants: settings.grants,
+      state_dir: settings.state_dir,
     }
   }
   const [name, ...args] = argv
@@ -176,6 +178,7 @@ async function runTool(command: Extract<Command, { name: "run" }>, io: CliIo): P
       ownDir: io.ownDir,
       options: command.options,
       grants: command.grants,
+      ...stateDirContext(command),
       signal: io.signal,
     }
     await checkPin(spec, args, ctx, command.pin, io.describeTimeoutMs)
@@ -200,6 +203,7 @@ async function targetOf(command: Extract<Command, { name: "target" }>, io: CliIo
       ownDir: io.ownDir,
       options: command.options,
       grants: command.grants,
+      ...stateDirContext(command),
       signal: io.signal,
     }
     const t = promptTranslator(io.translations ?? {}, command.language)

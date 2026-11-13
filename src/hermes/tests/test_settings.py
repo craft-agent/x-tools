@@ -55,8 +55,8 @@ class SettingsFlagsTest(unittest.TestCase):
 
 
 class OptionFlagsTest(unittest.TestCase):
-    def test_the_starter_has_no_tool_options(self) -> None:
-        self.assertEqual(project.OPTIONS, {})
+    def test_the_package_has_the_state_dir_option(self) -> None:
+        self.assertEqual(project.OPTIONS, {"state_dir": "path"})
 
     def test_each_kind_becomes_a_flag(self) -> None:
         options = {"note_text": "text", "note_pinned": "boolean", "note_count": "number", "note_tags": "list"}

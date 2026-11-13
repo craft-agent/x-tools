@@ -24,6 +24,7 @@ import {
 import { errorBody } from "../entry/errors"
 import { PROJECT_PROFILE } from "../entry/profile"
 import type { EntrySettings } from "../entry/settings"
+import { stateDirContext } from "../entry/state-dir"
 import { PROJECT } from "../project"
 import { elicitationConfirm } from "./confirm"
 import { createWorkingDirResolver, SANDBOX_STATE_META } from "./roots"
@@ -96,6 +97,7 @@ export function createServer(specs: ToolSpec[], settings: EntrySettings, options
         ownDir: options.ownDir,
         options: settings.options,
         grants: settings.grants,
+        ...stateDirContext(settings),
         signal: extra.signal,
         ...(confirm && { confirm }),
       }

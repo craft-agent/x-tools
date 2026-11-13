@@ -24,7 +24,9 @@
         "X_TOOLS_CONFIRM",
         "X_TOOLS_UNATTENDED",
         "X_TOOLS_GRANTS_DIR",
-        "X_TOOLS_GRANT_KEY"
+        "X_TOOLS_STATE_DIR",
+        "X_TOOLS_GRANT_KEY",
+        "XDG_STATE_HOME"
       ]
     }
   }
