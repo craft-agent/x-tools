@@ -39,10 +39,10 @@ describe("engine command line", () => {
     expect(run.stdout).toStartWith("engine: not installed")
   })
 
-  test("the unknown-command message mentions engine, and list is unchanged", async () => {
+  test("the unknown-command message mentions the person's commands, and list is unchanged", async () => {
     const unknown = await cli(["frobnicate"])
     expect(unknown.code).toBe(EXIT_USAGE)
-    expect(unknown.stderr).toContain("or engine install|status.")
+    expect(unknown.stderr).toContain("engine install|status, login [--account <label>] or remove --account <label>.")
     const list = await cli(["list"])
     expect(list.code).toBe(0)
     expect(Array.isArray(JSON.parse(list.stdout))).toBe(true)

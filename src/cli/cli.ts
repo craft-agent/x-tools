@@ -23,9 +23,11 @@ import { stateDirContext } from "../entry/state-dir"
 import { visible } from "../entry/visible"
 import { promptTranslator, promptWords } from "../entry/words"
 import { PROJECT } from "../project"
-import { usageError } from "./command-args"
+import { ACCOUNT_FLAG, usageError } from "./command-args"
 import { EXIT_FAILED, EXIT_OK, EXIT_USAGE, type CommandIo } from "./command-io"
 import { runEngineCommand } from "./engine"
+import { runLoginCommand } from "./login"
+import { runRemoveCommand } from "./remove"
 
 export { EXIT_FAILED, EXIT_OK, EXIT_USAGE }
 
@@ -93,7 +95,7 @@ function parseCommand(argv: string[], io: Pick<CliIo, "specs" | "env" | "profile
   if (name !== "run" && name !== "target") {
     const given = name === undefined ? "No command given" : `Unknown command "${name}"`
     throw usageError(
-      `${given}; use list, run <tool-id> --cwd <dir> [${PIN_FLAG} <hex>], target <tool-id> --cwd <dir> [${LANGUAGE_FLAG} <tag>] [${HARNESS_LANGUAGE_FLAG} <tag>] or engine install|status.`,
+      `${given}; use list, run <tool-id> --cwd <dir> [${PIN_FLAG} <hex>], target <tool-id> --cwd <dir> [${LANGUAGE_FLAG} <tag>] [${HARNESS_LANGUAGE_FLAG} <tag>], engine install|status, login [${ACCOUNT_FLAG} <label>] or remove ${ACCOUNT_FLAG} <label>.`,
     )
   }
 
@@ -153,20 +155,25 @@ async function readArguments(io: CliIo): Promise<unknown> {
   }
 }
 
+/** The context a `run` or `target` call gets from the command line and the process's surroundings. */
+function callContext(command: Extract<Command, { name: "run" | "target" }>, io: CliIo) {
+  return {
+    cwd: command.cwd,
+    ownDir: io.ownDir,
+    options: command.options,
+    grants: command.grants,
+    ...stateDirContext(command),
+    runtime: createToolRuntime(io),
+    signal: io.signal,
+  }
+}
+
 async function runTool(command: Extract<Command, { name: "run" }>, io: CliIo): Promise<number> {
   const spec = command.selected.find((candidate) => candidate.id === command.toolId)
   if (!spec) return writeError(io, "invalid_argument", `Unknown tool "${command.toolId}".`)
   try {
     const args = await readArguments(io)
-    const ctx = {
-      cwd: command.cwd,
-      ownDir: io.ownDir,
-      options: command.options,
-      grants: command.grants,
-      ...stateDirContext(command),
-      runtime: createToolRuntime(io),
-      signal: io.signal,
-    }
+    const ctx = callContext(command, io)
     await checkPin(spec, args, ctx, command.pin, io.describeTimeoutMs)
     const result = await invoke(spec, args, ctx)
     writeJson(io, { result })
@@ -184,15 +191,7 @@ async function targetOf(command: Extract<Command, { name: "target" }>, io: CliIo
   if (!spec) return writeError(io, "invalid_argument", `Unknown tool "${command.toolId}".`)
   try {
     const args = await readArguments(io)
-    const ctx = {
-      cwd: command.cwd,
-      ownDir: io.ownDir,
-      options: command.options,
-      grants: command.grants,
-      ...stateDirContext(command),
-      runtime: createToolRuntime(io),
-      signal: io.signal,
-    }
+    const ctx = callContext(command, io)
     const t = promptTranslator(io.translations ?? {}, command.language)
     const approval = await approvalOf(spec, args, ctx, io.describeTimeoutMs, t)
     if (approval.refused) {
@@ -226,6 +225,8 @@ function errorDetail(error: unknown): string {
 /** The commands a person runs to manage the package's local state, which print plain text rather than a JSON document. */
 const PERSON_COMMANDS: Partial<Record<string, (argv: string[], io: CliIo) => Promise<number>>> = {
   engine: runEngineCommand,
+  login: runLoginCommand,
+  remove: runRemoveCommand,
 }
 
 /**
@@ -259,8 +260,8 @@ const PERSON_COMMANDS: Partial<Record<string, (argv: string[], io: CliIo) => Pro
  * as flags or `<envPrefix>_<OPTION>` variables, and `run` and `target` hand their
  * values to the tool as `options`. Standard output carries only the JSON document; a
  * mistake in the command line is one line on standard error and `EXIT_USAGE`.
- * `engine` is for a person managing the engine's local install (see
- * `PERSON_COMMANDS`). Resolves to the exit code.
+ * `engine`, `login` and `remove` are for a person managing the engine and the
+ * reading accounts' local state (see `PERSON_COMMANDS`). Resolves to the exit code.
  */
 export async function runCli(argv: string[], io: CliIo): Promise<number> {
   const [name, ...rest] = argv
