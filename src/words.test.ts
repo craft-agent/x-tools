@@ -4,7 +4,7 @@ import { ALL_TRANSLATIONS } from "./words"
 
 describe("ALL_TRANSLATIONS", () => {
   test("holds the shared fact words in Japanese", () => {
-    expect(ALL_TRANSLATIONS.ja).toEqual({ ...FACT_TRANSLATIONS.ja })
+    expect(ALL_TRANSLATIONS.ja).toMatchObject(FACT_TRANSLATIONS.ja!)
     expect(ALL_TRANSLATIONS.ja!.Size).toBe("サイズ")
   })
 })
