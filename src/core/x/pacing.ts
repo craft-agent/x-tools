@@ -66,7 +66,7 @@ export async function writePacingState(paths: LabelPaths, state: PacingState): P
 }
 
 /** The reads of `state` less than `windowMs` old at `now`. */
-function within(state: PacingState, now: number, windowMs: number): number[] {
+export function within(state: PacingState, now: number, windowMs: number): number[] {
   return state.calls.filter((time) => now - time < windowMs)
 }
 
