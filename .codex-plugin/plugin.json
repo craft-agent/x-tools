@@ -1,0 +1,31 @@
+{
+  "name": "agent-tool-starter",
+  "version": "0.3.0",
+  "description": "A starter for tool packages that coding agents call: one implementation delivered to every harness.",
+  "author": {
+    "name": "craftsamo",
+    "url": "https://github.com/craftsamo"
+  },
+  "homepage": "https://github.com/craftsamo/agent-tool-starter#readme",
+  "repository": "https://github.com/craftsamo/agent-tool-starter",
+  "license": "LicenseRef-AGPL-3.0-Commons-Clause",
+  "skills": "./skills",
+  "mcpServers": {
+    "agent-tool-starter": {
+      "command": "node",
+      "args": ["dist/mcp.js"],
+      "cwd": ".",
+      "default_tools_approval_mode": "writes",
+      "env_vars": [
+        "AGENT_TOOL_STARTER_TOOLSETS",
+        "AGENT_TOOL_STARTER_READ_ONLY",
+        "AGENT_TOOL_STARTER_TOOLS",
+        "AGENT_TOOL_STARTER_EXCLUDE_TOOLS",
+        "AGENT_TOOL_STARTER_CONFIRM",
+        "AGENT_TOOL_STARTER_UNATTENDED",
+        "AGENT_TOOL_STARTER_GRANTS_DIR",
+        "AGENT_TOOL_STARTER_GRANT_KEY"
+      ]
+    }
+  }
+}

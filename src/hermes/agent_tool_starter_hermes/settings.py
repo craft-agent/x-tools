@@ -1,0 +1,122 @@
+"""The plugin's settings, turned into the flags of the command line."""
+
+from __future__ import annotations
+
+import math
+from collections.abc import Mapping
+from typing import Any
+
+from . import project
+from .context import PluginContext
+
+#: The value of ``toolsets`` that turns on every toolset.
+ALL_TOOLSETS = "all"
+
+
+class SettingsError(ValueError):
+    """A setting has a value of the wrong type."""
+
+
+def _names(key: str, value: Any) -> str | None:
+    """A list of names as the comma-separated text a flag takes; ``None`` for no names."""
+    if not isinstance(value, list) or not all(isinstance(item, str) for item in value):
+        raise SettingsError(f'setting "{key}" must be a list of names')
+    return ",".join(value) or None
+
+
+def language_setting(ctx: PluginContext) -> str | None:
+    """The ``language`` setting, stripped; ``None`` when it is absent, blank or not a string.
+
+    It is no flag of ``settings_flags``: only ``target`` takes a language.
+    """
+    value = ctx.get_config("language")
+    return (value.strip() or None) if isinstance(value, str) else None
+
+
+def emoji_setting(ctx: PluginContext, defaults: Mapping[str, str] | None = None) -> dict[str, str]:
+    """The emoji per toolset: ``defaults`` (``project.TOOLSET_EMOJI``) with string entries of ``emoji`` merged over it.
+
+    A setting that is not a ``dict``, and an entry whose key or value is not a
+    ``str``, are ignored so a typo never takes every tool away. It is no flag
+    of ``settings_flags``.
+    """
+    merged = dict(project.TOOLSET_EMOJI if defaults is None else defaults)
+    value = ctx.get_config("emoji")
+    if isinstance(value, dict):
+        merged.update({key: item for key, item in value.items() if isinstance(key, str) and isinstance(item, str)})
+    return merged
+
+
+def _option_flag(name: str, declaration: str | dict[str, object], value: Any) -> list[str]:
+    kind = declaration["type"] if isinstance(declaration, dict) else declaration
+    flag = f"--{name.replace('_', '-')}"
+    if kind in ("text", "path"):
+        if not isinstance(value, str):
+            expected = "a path" if kind == "path" else "text"
+            raise SettingsError(f'setting "{name}" must be {expected}')
+        return [flag, text] if (text := value.strip()) else []
+    if kind == "boolean":
+        if not isinstance(value, bool):
+            raise SettingsError(f'setting "{name}" must be true or false')
+        return [flag] if value else []
+    if kind == "number":
+        if isinstance(value, bool) or not isinstance(value, (int, float)) or not math.isfinite(value):
+            raise SettingsError(f'setting "{name}" must be a finite number')
+        return [flag, str(value)]
+    if kind in ("list", "paths"):
+        if not isinstance(value, list) or not all(isinstance(item, str) and "," not in item for item in value):
+            expected = "paths" if kind == "paths" else "strings"
+            raise SettingsError(f'setting "{name}" must be a list of {expected} without commas')
+        items = [item.strip() for item in value if item.strip()]
+        return [flag, ",".join(items)] if items else []
+    raise SettingsError(f'unknown option type "{kind}" for "{name}"')
+
+
+def option_flags(ctx: PluginContext, options: Mapping[str, str | dict[str, object]] | None = None) -> list[str]:
+    """The package's tool options as flags, with absent settings left to the command line's environment.
+
+    Bounds and path absoluteness are checked by the command line, not here.
+    """
+    flags: list[str] = []
+    for name, declaration in (project.OPTIONS if options is None else options).items():
+        value = ctx.get_config(name)
+        if value is not None:
+            flags += _option_flag(name, declaration, value)
+    return flags
+
+
+def settings_flags(ctx: PluginContext) -> list[str]:
+    """Read the selection, grant and package settings and return the flags that say the same.
+
+    A setting that is absent gives no flag, so the command line's own defaults
+    (and ``AGENT_TOOL_STARTER_*`` variables) apply. A wrong type is refused rather
+    than ignored, since ignoring ``read_only`` would loosen what the person asked for.
+
+    Raises:
+        SettingsError: a setting has a value of the wrong type.
+    """
+    flags: list[str] = []
+
+    toolsets = ctx.get_config("toolsets")
+    if toolsets == ALL_TOOLSETS:
+        flags += ["--toolsets", ALL_TOOLSETS]
+    elif toolsets is not None and (names := _names("toolsets", toolsets)):
+        flags += ["--toolsets", names]
+
+    read_only = ctx.get_config("read_only")
+    if read_only is not None and not isinstance(read_only, bool):
+        raise SettingsError('setting "read_only" must be true or false')
+    if read_only:
+        flags.append("--read-only")
+
+    for key, flag in (("tools", "--tools"), ("exclude_tools", "--exclude-tools")):
+        value = ctx.get_config(key)
+        if value is not None and (names := _names(key, value)):
+            flags += [flag, names]
+
+    return [*flags, *option_flags(ctx), *grant_flags(ctx)]
+
+
+def grant_flags(ctx: PluginContext) -> list[str]:
+    """The grant settings shared by ``target`` and ``run``, using the boolean and path option rules."""
+    return option_flags(ctx, {"unattended": "boolean", "grants_dir": "path"})
