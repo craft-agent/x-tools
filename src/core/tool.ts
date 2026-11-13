@@ -1,6 +1,7 @@
 import { z } from "zod"
 import { ToolError, isAbortError, isToolError } from "./errors"
 import { finishGrantUse, grantCheck, type GrantContext } from "./grant/guard"
+import type { ToolRuntime } from "./runtime"
 
 /** The toolsets of a package: every name, in the order `all` lists them, and the ones on when a setting names none. */
 export type Toolsets = { names: readonly string[]; defaults: readonly string[] }
@@ -74,6 +75,8 @@ export type ToolContext = {
   grants?: GrantContext
   /** Where every reading account's state and the engine live: an absolute path the entry point resolved. */
   stateDir?: string
+  /** The package's identity and environment, which the entry point supplied. */
+  runtime?: ToolRuntime
 }
 
 /** What a grant over a tool can limit: a whole-number ceiling, a yes/no, or a set of allowed values. */

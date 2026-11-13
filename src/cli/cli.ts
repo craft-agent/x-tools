@@ -17,6 +17,7 @@ import {
 import { errorBody } from "../entry/errors"
 import { approvalOf, checkPin } from "../entry/pin"
 import { PROJECT_PROFILE, type EntryProfile } from "../entry/profile"
+import { createToolRuntime } from "../entry/runtime"
 import { parseTargetSettings, parseToolSettings, promptLanguage, type ToolEntrySettings } from "../entry/settings"
 import { stateDirContext } from "../entry/state-dir"
 import { visible } from "../entry/visible"
@@ -163,6 +164,7 @@ async function runTool(command: Extract<Command, { name: "run" }>, io: CliIo): P
       options: command.options,
       grants: command.grants,
       ...stateDirContext(command),
+      runtime: createToolRuntime(io),
       signal: io.signal,
     }
     await checkPin(spec, args, ctx, command.pin, io.describeTimeoutMs)
@@ -188,6 +190,7 @@ async function targetOf(command: Extract<Command, { name: "target" }>, io: CliIo
       options: command.options,
       grants: command.grants,
       ...stateDirContext(command),
+      runtime: createToolRuntime(io),
       signal: io.signal,
     }
     const t = promptTranslator(io.translations ?? {}, command.language)

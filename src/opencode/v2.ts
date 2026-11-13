@@ -1,6 +1,7 @@
-import type { GrantContext, ToolOptions, ToolSpec, Translator } from "../core"
+import type { GrantContext, ToolOptions, ToolRuntime, ToolSpec, Translator } from "../core"
 import { DESCRIBE_TIMEOUT_MS } from "../entry/description"
 import { approvalOf } from "../entry/pin"
+import { createToolRuntime } from "../entry/runtime"
 import { loadSkills } from "./skills"
 import {
   harnessError,
@@ -31,6 +32,7 @@ function v2Tool(
   options: ToolOptions,
   grants: GrantContext,
   stateDir: string,
+  runtime: ToolRuntime,
 ): V2Tool {
   return {
     name: spec.id,
@@ -46,7 +48,7 @@ function v2Tool(
             `invalid_argument: The session's directory could not be read, so ${spec.id} cannot tell what it changes; retry.`,
           )
         }
-        const toolContext = { cwd: directory, ownDir, options, grants, stateDir, signal }
+        const toolContext = { cwd: directory, ownDir, options, grants, stateDir, runtime, signal }
         const approval = await approvalOf(spec, input, toolContext, DESCRIBE_TIMEOUT_MS, t)
         if (approval.refused) throw harnessError(approval.refused)
         const { resources, description } = approval
@@ -62,7 +64,7 @@ function v2Tool(
       const result = await runTool(
         spec,
         input,
-        { cwd: directory ?? process.cwd(), ownDir, options, grants, stateDir, signal },
+        { cwd: directory ?? process.cwd(), ownDir, options, grants, stateDir, runtime, signal },
         pin,
       )
       return { content: JSON.stringify(result), output: result }
@@ -92,8 +94,18 @@ async function askForActions(ctx: V2Context, ids: string[]): Promise<void> {
 export function createV2Setup(specs: ToolSpec[], deps: PluginDeps = {}): OpenCodePlugin["setup"] {
   return async function setup(ctx: V2Context): Promise<void> {
     const selected = selectedTools(specs, ctx.options, deps)
+    const runtime = createToolRuntime(deps)
     const tools = selected.specs.map((spec) =>
-      v2Tool(ctx, spec, deps.ownDir, selected.translator, selected.options, selected.grants, selected.stateDir),
+      v2Tool(
+        ctx,
+        spec,
+        deps.ownDir,
+        selected.translator,
+        selected.options,
+        selected.grants,
+        selected.stateDir,
+        runtime,
+      ),
     )
     const skills =
       deps.skillsDir === undefined
