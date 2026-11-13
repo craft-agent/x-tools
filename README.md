@@ -2,6 +2,15 @@
 
 Unofficial, read-only X tools for coding agents: search, threads, profiles, media and post checks.
 
+> [!WARNING]
+> These tools read X the way its web app does, signed in with a browser
+> session's cookies, not through the X API. X's automation rules forbid it,
+> and the account can be locked or suspended at any time, read-only use
+> included. Sign in with a separate reading account whose loss you accept,
+> never your main one. The cookies are the account: whoever holds them is
+> signed in as it until X ends the session. Nothing here posts, replies,
+> likes, follows or sends.
+
 | Harness        | Delivery                                       | Pinned by                      |
 | -------------- | ---------------------------------------------- | ------------------------------ |
 | OpenCode V2    | native plugin (npm package, with skills)       | the version in the package     |
@@ -182,6 +191,34 @@ A tool adds what a grant can also limit by declaring `bounds` and giving
 `measure(args, context)` in its spec; see the
 [conventions](docs/conventions.md#writes-no-one-is-there-to-approve).
 
+## Reading accounts
+
+A label names one reading account, `default` unless you name another; a call
+picks one with its `account` argument, which may be left out while there is
+only one. Each label keeps its state in its own directory,
+`<state root>/<label>/` (mode 700), under the `state_dir`
+[setting](#settings): by default `$XDG_STATE_HOME/x-tools`, else
+`~/.local/state/x-tools`. The engine's venv lives under the state root too.
+
+The tools read X through [twscrape](https://github.com/vladkens/twscrape),
+which needs Python; the package builds it a venv from the hash-pinned
+requirements it ships. Every read of a label is paced: one at a time across
+every process sharing the state directory, `read_gap_seconds` apart, and at
+most `reads_per_hour` and `reads_per_day`. Past a cap, or while X
+rate-limits the account, a call fails as `rate_limited` without contacting X.
+A session X refuses is remembered, and nothing reaches X again until the
+cookies change.
+
+A label's cookies come from `X_TOOLS_COOKIES_<LABEL>`
+(`X_TOOLS_COOKIES_DEFAULT` for `default`) when it is set, else from the
+label's cookie file (mode 600), which the login command writes from standard
+input. The value is `auth_token=…; ct0=…`, copied from a browser signed in to
+x.com as the reading account. Never pass it as an argument. Codex forwards no
+variable whose name depends on a label, so use the file there.
+
+Public posts can also be looked up through FxTwitter's public API, with no
+reading account and outside its caps.
+
 ## Adding a tool
 
 1. Write the spec in `src/core/<domain>/<verb>.ts` with `defineTool`: an ID
@@ -337,18 +374,22 @@ with; see [Settings](#settings) before changing the job's variables.
 Every entry point takes the same settings. A flag wins over its environment
 variable, and an option or setting wins over the variable too.
 
-| Setting           | Flag              | Variable                | Meaning                                                                                                             |
-| ----------------- | ----------------- | ----------------------- | ------------------------------------------------------------------------------------------------------------------- |
-| `toolsets`        | `--toolsets`      | `X_TOOLS_TOOLSETS`      | the toolsets that are on, or `all`; default those `src/project.ts` names                                            |
-| `read_only`       | `--read-only`     | `X_TOOLS_READ_ONLY`     | registers no tool that writes; wins over every other setting                                                        |
-| `unattended`      | `--unattended`    | `X_TOOLS_UNATTENDED`    | no person can answer: a write runs only under a grant that covers it; off by default                                |
-| `grants_dir`      | `--grants-dir`    | `X_TOOLS_GRANTS_DIR`    | where grants and their use are kept; default `$XDG_STATE_HOME/x-tools/grants`, else `~/.local/state/x-tools/grants` |
-| `tools`           | `--tools`         | `X_TOOLS_TOOLS`         | single tools to add by ID, whatever their toolset                                                                   |
-| `exclude_tools`   | `--exclude-tools` | `X_TOOLS_EXCLUDE_TOOLS` | single tools to remove by ID; wins over `tools` and `toolsets`                                                      |
-| `confirm`         | `--confirm`       | `X_TOOLS_CONFIRM`       | MCP server only: `harness` (default) or `elicitation`, as the conventions say                                       |
-| `language`        | `--language`      | `X_TOOLS_LANGUAGE`      | native plugins only: the approval prompt's language, such as `ja`                                                   |
-| `emoji`           | —                 | —                       | Hermes only: the emoji shown beside each toolset, by toolset name (`""` for none)                                   |
-| `require_plugins` | —                 | —                       | Hermes only: the plugins that must be loaded; while one is not, every write is refused before it is approved        |
+| Setting            | Flag                 | Variable                   | Meaning                                                                                                             |
+| ------------------ | -------------------- | -------------------------- | ------------------------------------------------------------------------------------------------------------------- |
+| `toolsets`         | `--toolsets`         | `X_TOOLS_TOOLSETS`         | the toolsets that are on, or `all`; default those `src/project.ts` names                                            |
+| `read_only`        | `--read-only`        | `X_TOOLS_READ_ONLY`        | registers no tool that writes; wins over every other setting                                                        |
+| `unattended`       | `--unattended`       | `X_TOOLS_UNATTENDED`       | no person can answer: a write runs only under a grant that covers it; off by default                                |
+| `grants_dir`       | `--grants-dir`       | `X_TOOLS_GRANTS_DIR`       | where grants and their use are kept; default `$XDG_STATE_HOME/x-tools/grants`, else `~/.local/state/x-tools/grants` |
+| `tools`            | `--tools`            | `X_TOOLS_TOOLS`            | single tools to add by ID, whatever their toolset                                                                   |
+| `exclude_tools`    | `--exclude-tools`    | `X_TOOLS_EXCLUDE_TOOLS`    | single tools to remove by ID; wins over `tools` and `toolsets`                                                      |
+| `confirm`          | `--confirm`          | `X_TOOLS_CONFIRM`          | MCP server only: `harness` (default) or `elicitation`, as the conventions say                                       |
+| `language`         | `--language`         | `X_TOOLS_LANGUAGE`         | native plugins only: the approval prompt's language, such as `ja`                                                   |
+| `emoji`            | —                    | —                          | Hermes only: the emoji shown beside each toolset, by toolset name (`""` for none)                                   |
+| `require_plugins`  | —                    | —                          | Hermes only: the plugins that must be loaded; while one is not, every write is refused before it is approved        |
+| `state_dir`        | `--state-dir`        | `X_TOOLS_STATE_DIR`        | every reading account's state and the engine; default `$XDG_STATE_HOME/x-tools`, else `~/.local/state/x-tools`      |
+| `read_gap_seconds` | `--read-gap-seconds` | `X_TOOLS_READ_GAP_SECONDS` | the least time between two reads of X by one account; default 5                                                     |
+| `reads_per_hour`   | `--reads-per-hour`   | `X_TOOLS_READS_PER_HOUR`   | the most reads of X by one account in an hour; default 30                                                           |
+| `reads_per_day`    | `--reads-per-day`    | `X_TOOLS_READS_PER_DAY`    | the most reads of X by one account in 24 hours; default 200                                                         |
 
 `X_TOOLS_GRANT_KEY` is a variable only, never a flag or a plugin
 option. Use at least 32 characters, for example from `openssl rand -hex 32`,

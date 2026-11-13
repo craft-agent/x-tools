@@ -38,6 +38,20 @@ tagged `v<version>`; consumers pin a tag or the same npm version.
   annotations are hints, never the boundary.
 - **Every program a tool runs goes through one runner**, which fixes a
   non-interactive environment and maps failures to error codes.
+- **Nothing writes to X.** No tool, method or argument posts, replies, likes,
+  reposts, follows, bookmarks or sends; the one write is a download to the
+  machine. A reader that cannot write cannot be steered into acting on the
+  account.
+- **Every read of X goes through the engine call and its pacing.** A tool
+  never starts the bridge, opens the state files or contacts x.com itself;
+  otherwise a read escapes the caps and the remembered refusal that keep the
+  reading account alive.
+- **Cookies never leave the engine call.** They are never an argument, a
+  setting, a tool's input, a result, an error or a log line, and reach the
+  bridge only on its standard input. Tests use made-up values.
+- **No test reaches X or FxTwitter.** The bridge is tested against a fake
+  twscrape, the engine call against a fake bridge, and lookups against a fake
+  FxTwitter.
 - **Every commit stays small.** The pre-commit hook rejects a commit over 500
   reviewable changed lines; split the change instead of raising the limit.
 

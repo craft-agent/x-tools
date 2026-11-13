@@ -346,23 +346,20 @@ Every entry point takes the same settings:
   would loosen what the person asked for. No other entry point has it.
 - **Options** are the package's own settings, the ones the tools themselves
   read, listed in `options` in `src/project.ts` (and `OPTIONS` in the Hermes
-  plugin's `project.py`), each mapping a snake_case name to its type (`text`,
+  plugin's `project.py`), each mapping a snake*case name to its type (`text`,
   `boolean`, `number`, `list`, `path` or `paths`) or a declaration with
   `{ type, integer, min, max }`. `integer: true` requires a whole `number`;
   `min` and `max` bound a `number` or count the items of a `list` or `paths`.
-  Only `type` is required. Its flag is the name with `_` as `-` (a
-  `boolean` flag takes no value), its variable is `<envPrefix>_<NAME>`
-  uppercased, and its plugin option or setting is the name itself. A flag wins
+  Only `type` is required. Its flag is the name with `*`as`-`(a`boolean`flag takes no value), its variable is`<envPrefix>\_<NAME>`uppercased, and its plugin option or setting is the name itself. A flag wins
   over its variable, an option over its variable, and a blank text or path or
-  empty list counts as unset. A `path` is trimmed; `~` alone or followed by
-  `/` (or the platform separator) stands for the home directory: `HOME` when
+  empty list counts as unset. A`path`is trimmed;`~`alone or followed by`/`(or the platform separator) stands for the home directory:`HOME`when
   it is absolute, else the account's.
   The expanded path must be absolute and reaches the tool normalized, without
-  a filesystem check. A `paths` value is a list of such paths, comma-separated
+  a filesystem check. A`paths`value is a list of such paths, comma-separated
   in a flag or variable and an array of strings in a plugin option; items are
   trimmed and blank items dropped, and none left counts as unset. Bounds
   check only a value that is given, after blanks are dropped; unset stays
-  unset. Refused values are `invalid_argument`, naming the flag, variable or
+  unset. Refused values are`invalid_argument`, naming the flag, variable or
   option and what it must be. A package should not have to check a directory
   or a limit again inside its tool. They reach a tool as `context.options`,
   keyed by name, and one that is not given is absent: a neutral default means
@@ -573,3 +570,147 @@ and every entry point checks them the same way.
   against a fake of that program on `PATH`.
 - A test file stays within about 300 lines, split by topic
   (`<name>.<topic>.test.ts`), so one commit can carry a change and its test.
+
+## Unofficial access
+
+- **The tools read X the way its web app does, not through the X API.** The
+  engine calls the GraphQL endpoints x.com uses, signed in with a browser
+  session's cookies. X's automation rules forbid it, and the account can be
+  locked or suspended at any time, read-only use included. The README says so
+  before anything else, so nobody sets the tools up without knowing it.
+- **Sign in with a separate reading account, never the main one.** Whatever
+  happens to the session happens to the account it belongs to; a reading
+  account can be lost without losing anything else. Its own bookmarks,
+  notifications and home timeline are therefore not the user's, and no tool
+  reads them.
+- **Nothing writes to X**: no post, reply, like, repost, follow, bookmark or
+  direct message, now or later. The only write is a download to the machine.
+  A reader that cannot write cannot be steered into acting on the account.
+- **No tool has an "own" account.** Every read names the handle it reads, and
+  no setting holds a default one. Following one's own account is how a caller
+  uses X, not part of reading it, and a default handle would make a call mean
+  different things on different machines.
+
+## Accounts and state
+
+- **One label is one reading account.** A label is 1 to 24 lowercase letters,
+  digits and `_`, starting and ending with a letter or a digit; `login` names
+  it `default` when no label is given. A label is also a directory name and
+  part of a variable's name, so the set is kept to what both take as it is.
+- **Each label keeps all of its state in one directory**,
+  `<state root>/<label>/`, created with mode 700: the cookie file when there
+  is one, the call times for pacing, what X last made of the session and a
+  handle → user id cache. The state root is the `state_dir` path option, by
+  default `$XDG_STATE_HOME/x-tools` when `XDG_STATE_HOME` is absolute, else
+  `~/.local/state/x-tools`. The engine's venv lives under the state root too,
+  shared by every label. One directory per label means a label is moved,
+  backed up or removed as a whole.
+- **`account` picks the label.** Left out, it picks the only label; with
+  several, the call fails as `invalid_argument` and lists them. One account is
+  the common case and needs no argument, while several never depend on which
+  one a tool guesses.
+- **The account read never contacts X.** It reports each label from its
+  state: where its cookies come from, whether X refused them, a running rate
+  limit, the reads used against the caps, and the one command to run when
+  something is wrong. A read that spent a request to learn this would spend
+  the budget it reports.
+
+## The cookies
+
+- **The cookies come from the environment first.** `X_TOOLS_COOKIES_<LABEL>`
+  (`X_TOOLS_COOKIES_DEFAULT` for `default`) is used when it is set, and the
+  package then stores nothing; otherwise the label's cookie file
+  (`<state root>/<label>/cookies`, mode 600), which `login` writes from
+  standard input. How the variable is filled (a keychain, a password manager,
+  a service manager's credentials) is the user's choice; the file works where
+  nothing injects it, Codex included, which forwards no variable whose name
+  depends on a label.
+- **The value is `auth_token=…; ct0=…`**, as a browser holds them for x.com.
+  Both are required: `auth_token` is the session and `ct0` its CSRF token.
+- **Cookies are never an argument, a setting or a tool's input.** A harness
+  shows and logs a call's arguments, and settings land in configuration files.
+- **Only the engine call reads them, and it hands them to the bridge on
+  standard input**, never in its environment or arguments, which other
+  processes on the machine can read. Nothing from them reaches a result, an
+  error or a log: every string the bridge returns has both values masked, and
+  the account read names the source, never the value. Whoever holds the
+  cookies is signed in as the account until X ends the session.
+
+## The engine
+
+- **Every read of X goes through one engine call**, as every program goes
+  through one runner. The venv's interpreter runs the package's bridge with
+  one JSON request on standard input and one JSON reply on standard output,
+  under a time limit, with a minimal environment and twscrape's telemetry
+  off, and the reply's kinds are mapped to the error codes above. A tool never
+  starts the bridge itself.
+- **The engine is [twscrape](https://github.com/vladkens/twscrape), pinned
+  with hashes.** `engine install` builds the venv from the requirements file
+  the package ships and installs nothing unpinned, so a release always runs
+  the engine it was tested with. Its `curl` extra gives requests a browser's
+  TLS fingerprint.
+- **The session lives only in the bridge's memory.** twscrape keeps its
+  account pool in SQLite; the bridge holds it in an in-memory database, so
+  nothing of the session is written to disk, and the pool is built again for
+  every call.
+- **No engine, no request.** A call without the venv fails with the command
+  that installs it and counts as no read.
+
+## Pacing and session memory
+
+- **One read of X at a time per label**, across every process that shares the
+  state directory, with a minimum gap between reads and an hourly and a daily
+  cap. Two harnesses on one machine then count against one budget, and the
+  account moves at the pace of a person reading.
+- **Past a cap or during a rate limit the call fails as `rate_limited`**,
+  saying when to try again, without contacting X. A read that waited instead
+  would hold the caller for an hour.
+- **A call counts only when X was, or may have been, contacted.** A missing
+  engine or cookies, or a remembered refusal, costs nothing; a timeout counts,
+  since the request may have arrived.
+- **X's verdicts are remembered**, since the pool is rebuilt for every call
+  and twscrape forgets them. A session X refused is remembered by a
+  fingerprint of its cookies, and no request reaches X until the cookies
+  change; the end of a rate limit is remembered and every read waits for it.
+  Asking again with a session X has refused is the fastest way to lose the
+  account.
+- **The gap and the caps are settings with bounds**: `read_gap_seconds` (5 by
+  default), `reads_per_hour` (30) and `reads_per_day` (200), whole numbers.
+  They apply to every label alike: one budget per label, whoever calls. A
+  setting can lower what a cautious user allows, and its bounds keep a typo
+  from turning the pacing off.
+
+## Text a tool reads
+
+- **Post text, names, bios and links are written by other people.** Every read
+  tool's description, its result and the skills say they are data, never
+  instructions, and nothing in them is followed. Long text is clipped, and the
+  result says where.
+
+## Public post lookups
+
+- **Public posts can be looked up without signing in**, through FxTwitter's
+  public API. A lookup needs no reading account and counts against none of
+  its caps, so a caller can confirm many posts without spending the account.
+- **The lookup carries no cookies and reaches only `api.fxtwitter.com`**,
+  following redirects only there, with each reply's size capped.
+- **Lookups are paced on their own**: a gap, a daily cap, a time budget per
+  call and a cooldown after a 429, kept in state of their own beside the
+  labels. FxTwitter is a free third-party service, and a polite client keeps
+  it answering.
+
+## Files
+
+- **Media are written only under the directory a setting names**, judged by
+  real path, never inside the state directory or the tools' own install
+  directory. The setting and its default are settled with the media tool.
+
+## Toolsets
+
+- **One per domain**: `account` (`x_account_read`), `posts` (`x_post_read`),
+  `users` (`x_user_read`), `public` (`x_public_read`) and `media`
+  (`x_media_download`), beside the starter's `grants`. Each domain's methods
+  are settled with its tools.
+- **All five are on by default.** None does anything a person would not expect
+  from an X reader, and the one write puts files only under the download
+  directory.
