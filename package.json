@@ -23,6 +23,7 @@
   },
   "files": [
     "dist",
+    "engine",
     "skills",
     ".mcp.json",
     ".claude-plugin",
@@ -42,6 +43,7 @@
   },
   "scripts": {
     "build": "node scripts/build.mjs",
+    "engine:lock": "UV_NO_CONFIG=1 uv pip compile engine/requirements.in --universal --python-version 3.12 --generate-hashes --no-annotate --quiet --custom-compile-command 'pnpm run engine:lock' -o engine/requirements.lock",
     "manifests": "node scripts/manifests.mjs",
     "manifests:check": "node scripts/manifests.mjs --check",
     "smoke": "node scripts/smoke-mcp.mjs && node scripts/smoke-opencode.mjs && node scripts/smoke-cli.mjs",
