@@ -1,30 +1,30 @@
 {
-  "name": "agent-tool-starter",
-  "version": "0.3.0",
-  "description": "A starter for tool packages that coding agents call: one implementation delivered to every harness.",
+  "name": "x-tools",
+  "version": "0.0.0",
+  "description": "Unofficial, read-only X tools for coding agents: search, threads, profiles, media and post checks.",
   "author": {
     "name": "craftsamo",
-    "url": "https://github.com/craftsamo"
+    "url": "https://github.com/craft-agent"
   },
-  "homepage": "https://github.com/craftsamo/agent-tool-starter#readme",
-  "repository": "https://github.com/craftsamo/agent-tool-starter",
+  "homepage": "https://github.com/craft-agent/x-tools#readme",
+  "repository": "https://github.com/craft-agent/x-tools",
   "license": "LicenseRef-AGPL-3.0-Commons-Clause",
   "skills": "./skills",
   "mcpServers": {
-    "agent-tool-starter": {
+    "x-tools": {
       "command": "node",
       "args": ["dist/mcp.js"],
       "cwd": ".",
       "default_tools_approval_mode": "writes",
       "env_vars": [
-        "AGENT_TOOL_STARTER_TOOLSETS",
-        "AGENT_TOOL_STARTER_READ_ONLY",
-        "AGENT_TOOL_STARTER_TOOLS",
-        "AGENT_TOOL_STARTER_EXCLUDE_TOOLS",
-        "AGENT_TOOL_STARTER_CONFIRM",
-        "AGENT_TOOL_STARTER_UNATTENDED",
-        "AGENT_TOOL_STARTER_GRANTS_DIR",
-        "AGENT_TOOL_STARTER_GRANT_KEY"
+        "X_TOOLS_TOOLSETS",
+        "X_TOOLS_READ_ONLY",
+        "X_TOOLS_TOOLS",
+        "X_TOOLS_EXCLUDE_TOOLS",
+        "X_TOOLS_CONFIRM",
+        "X_TOOLS_UNATTENDED",
+        "X_TOOLS_GRANTS_DIR",
+        "X_TOOLS_GRANT_KEY"
       ]
     }
   }

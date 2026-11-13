@@ -13,7 +13,7 @@ type Gate = NonNullable<ToolSpec["gate"]>
 function fixture(gate?: Gate) {
   const calls = { gate: 0, targets: 0, describe: 0 }
   const spec: Pick<ToolSpec, "id" | "class" | "input" | "gate" | "targets" | "describe"> = {
-    id: "example_note_create",
+    id: "x_note_create",
     class: "add",
     input,
     gate:

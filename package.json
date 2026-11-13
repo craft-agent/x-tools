@@ -1,17 +1,16 @@
 {
-  "name": "@craftsamo/agent-tool-starter",
-  "version": "0.3.0",
-  "private": true,
-  "description": "A starter for tool packages that coding agents call: one implementation delivered to every harness.",
+  "name": "@craftsamo/x-tools",
+  "version": "0.0.0",
+  "description": "Unofficial, read-only X tools for coding agents: search, threads, profiles, media and post checks.",
   "author": "craftsamo",
   "license": "LicenseRef-AGPL-3.0-Commons-Clause",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/craftsamo/agent-tool-starter.git"
+    "url": "git+https://github.com/craft-agent/x-tools.git"
   },
-  "homepage": "https://github.com/craftsamo/agent-tool-starter#readme",
-  "bugs": "https://github.com/craftsamo/agent-tool-starter/issues",
-  "mcpName": "io.github.craftsamo/agent-tool-starter",
+  "homepage": "https://github.com/craft-agent/x-tools#readme",
+  "bugs": "https://github.com/craft-agent/x-tools/issues",
+  "mcpName": "io.github.craft-agent/x-tools",
   "type": "module",
   "main": "dist/opencode.js",
   "exports": {
@@ -19,8 +18,8 @@
     "./opencode": "./dist/opencode.js"
   },
   "bin": {
-    "agent-tool-starter": "dist/mcp.js",
-    "agent-tool-starter-cli": "dist/cli.js"
+    "x-tools": "dist/mcp.js",
+    "x-tools-cli": "dist/cli.js"
   },
   "files": [
     "dist",
@@ -33,7 +32,7 @@
     "mcp_config.json",
     "plugin.yaml",
     "__init__.py",
-    "src/hermes/agent_tool_starter_hermes",
+    "src/hermes/x_tools_hermes",
     "!**/__pycache__",
     "!**/*.pyc"
   ],
@@ -50,7 +49,6 @@
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "typecheck": "tsc -p tsconfig.json && tsc -p tsconfig.core.json",
-    "setup": "node scripts/setup/main.mjs",
     "postinstall": "node -e \"const fs=require('fs');if(fs.existsSync('.git')&&fs.existsSync('node_modules/@craftsamo/repo-kit'))require('child_process').execFileSync('repo-kit',['agents','sync'],{stdio:'inherit'})\"",
     "prepare": "node -e \"const fs=require('fs');if(fs.existsSync('.git')&&fs.existsSync('node_modules/husky'))require('child_process').execFileSync('husky',{stdio:'inherit'})\""
   },
