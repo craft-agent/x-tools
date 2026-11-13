@@ -24,6 +24,7 @@
   "files": [
     "dist",
     "engine",
+    "!engine/tests",
     "skills",
     ".mcp.json",
     ".claude-plugin",
