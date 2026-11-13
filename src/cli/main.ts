@@ -3,11 +3,15 @@ import { PROJECT } from "../project"
 import { PACKAGE_TOOLS } from "../entry/tools"
 import { ALL_TRANSLATIONS } from "../words"
 import { EXIT_FAILED, runCli } from "./cli"
+import { readSecretInput } from "./secret-input"
 
 const CANCEL_SIGNALS = ["SIGTERM", "SIGINT"] as const
 
-/** Standard input read to its end; a terminal has nothing to read, so it counts as empty. */
-async function readStdin(): Promise<string> {
+/** `login` reads secret input; tool JSON reads a pipe only and never prompts on a terminal. */
+async function readStdin(signal: AbortSignal): Promise<string> {
+  if (process.argv[2] === "login") {
+    return readSecretInput(process.stdin, (text) => process.stderr.write(text), signal)
+  }
   if (process.stdin.isTTY) return ""
   const chunks: Buffer[] = []
   for await (const chunk of process.stdin) chunks.push(Buffer.from(chunk))
@@ -24,7 +28,7 @@ async function main(): Promise<void> {
     translations: ALL_TRANSLATIONS,
     env: process.env,
     ownDir: packageRoot(import.meta.url),
-    readStdin,
+    readStdin: () => readStdin(controller.signal),
     stdout: (text) => process.stdout.write(text),
     stderr: (text) => process.stderr.write(text),
     signal: controller.signal,

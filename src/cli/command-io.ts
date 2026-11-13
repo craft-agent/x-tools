@@ -1,3 +1,5 @@
+import { createInterface } from "node:readline/promises"
+import { abortError, isAbortError } from "../core"
 import type { EntryProfile } from "../entry/profile"
 
 /** The exit codes of a command: it did its work, the work failed, or the command line was wrong. */
@@ -19,4 +21,31 @@ export type CommandIo = {
   ownDir?: string
   /** Stops a running command when it aborts. */
   signal?: AbortSignal
+  /** Whether standard input is an interactive terminal; defaults to the process's own. */
+  isTTY?: boolean
+  /** Asks the person one question and reads the answer; `undefined` when there is none. Defaults to `defaultReadLine`. */
+  readLine?(prompt: string): Promise<string | undefined>
+}
+
+/** Throws the `AbortError` of `signal` when it has aborted, whatever reason it carries. */
+export function throwIfCancelled(signal: AbortSignal | undefined): void {
+  if (signal?.aborted) throw abortError(signal)
+}
+
+/**
+ * Asks one question on the terminal and reads one line from standard input.
+ * The prompt goes to standard error, so standard output stays for results.
+ * Resolves to `undefined` when input ends or `signal` aborts, never hangs.
+ */
+export async function defaultReadLine(prompt: string, signal?: AbortSignal): Promise<string | undefined> {
+  const rl = createInterface({ input: process.stdin, output: process.stderr })
+  const ended = new Promise<undefined>((resolve) => rl.once("close", () => resolve(undefined)))
+  try {
+    return await Promise.race([rl.question(prompt, { signal }), ended])
+  } catch (error) {
+    if (isAbortError(error)) return undefined
+    throw error
+  } finally {
+    rl.close()
+  }
 }
