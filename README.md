@@ -211,10 +211,17 @@ every read on the reading account.
 
 A label names one reading account, `default` unless you name another; a call
 picks one with its `account` argument, which may be left out while there is
-only one. Each label keeps its state in its own directory,
-`<state root>/<label>/` (mode 700), under the `state_dir`
-[setting](#settings): by default `$XDG_STATE_HOME/x-tools`, else
-`~/.local/state/x-tools`. The engine's venv lives under the state root too.
+only one. Everything the package keeps lives under the `state_dir`
+[setting](#settings), by default `$XDG_STATE_HOME/x-tools`, else
+`~/.local/state/x-tools`, in one directory per role (each mode 700):
+
+```text
+<state root>/
+  accounts/<label>/   one reading account: its cookie file, reads, lock, X's verdicts
+  engine/venv/        the engine, shared by every account
+  fxtwitter/          FxTwitter's reads and cooldown
+  grants/             grants and their log, unless grants_dir moves them
+```
 
 The reading account reads X through
 [twscrape](https://github.com/vladkens/twscrape), which needs Python; the

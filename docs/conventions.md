@@ -598,14 +598,19 @@ and every entry point checks them the same way.
   digits and `_`, starting and ending with a letter or a digit; `login` names
   it `default` when no label is given. A label is also a directory name and
   part of a variable's name, so the set is kept to what both take as it is.
-- **Each label keeps all of its state in one directory**,
-  `<state root>/<label>/`, created with mode 700: the cookie file when there
-  is one, the call times for pacing, what X last made of the session and a
-  handle → user id cache. The state root is the `state_dir` path option, by
+- **The state root holds one directory per role**: `accounts/` with a
+  directory per label, `engine/` with the venv every label shares,
+  `fxtwitter/` with FxTwitter's pacing, and the starter's `grants/` when its
+  setting leaves it there. The state root is the `state_dir` path option, by
   default `$XDG_STATE_HOME/x-tools` when `XDG_STATE_HOME` is absolute, else
-  `~/.local/state/x-tools`. The engine's venv lives under the state root too,
-  shared by every label. One directory per label means a label is moved,
-  backed up or removed as a whole.
+  `~/.local/state/x-tools`. A label then never meets a name the package uses
+  itself, and no label name needs to be reserved.
+- **Each label keeps all of its state in one directory**,
+  `<state root>/accounts/<label>/`, created with mode 700 like every
+  directory above it: the cookie file when there is one, the call times for
+  pacing, what X last made of the session and a handle → user id cache. One
+  directory per label means a label is moved, backed up or removed as a
+  whole.
 - **`account` picks the label.** Left out, it picks the only label; with
   several, the call fails as `invalid_argument` and lists them. One account is
   the common case and needs no argument, while several never depend on which
@@ -622,7 +627,7 @@ and every entry point checks them the same way.
 - **The cookies come from the environment first.** `X_TOOLS_COOKIES_<LABEL>`
   (`X_TOOLS_COOKIES_DEFAULT` for `default`) is used when it is set, and the
   package then stores nothing; otherwise the label's cookie file
-  (`<state root>/<label>/cookies`, mode 600), which `login` writes from
+  (`<state root>/accounts/<label>/cookies`, mode 600), which `login` writes from
   standard input. How the variable is filled (a keychain, a password manager,
   a service manager's credentials) is the user's choice; the file works where
   nothing injects it, Codex included, which forwards no variable whose name
