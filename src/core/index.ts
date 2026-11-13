@@ -1,5 +1,6 @@
 export { ToolError, isAbortError, isToolError, type ErrorCode, type ErrorDetails, type JsonValue } from "./errors"
 export { abortError, exec, type ExecOptions, type ExecResult } from "./exec"
+export { exitFailure, run, type RunOptions } from "./runner"
 export {
   MAX_GRANT_DAYS,
   GRANTS_TOOLSET,
