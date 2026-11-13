@@ -573,16 +573,17 @@ and every entry point checks them the same way.
 
 ## Unofficial access
 
-- **The tools read X the way its web app does, not through the X API.** The
-  engine calls the GraphQL endpoints x.com uses, signed in with a browser
-  session's cookies. X's automation rules forbid it, and the account can be
-  locked or suspended at any time, read-only use included. The README says so
-  before anything else, so nobody sets the tools up without knowing it.
+- **The tools never use the X API.** They read through two sources (below):
+  FxTwitter, a third-party service that reads X itself, and a reading
+  account, whose engine calls the GraphQL endpoints x.com uses, signed in
+  with a browser session's cookies. X's terms forbid scraping and its
+  automation rules name scripting the website as grounds for suspension, so
+  the reading account can be locked or suspended at any time, read-only use
+  included. The README says so before anything else, so nobody sets the tools
+  up without knowing it.
 - **Sign in with a separate reading account, never the main one.** Whatever
   happens to the session happens to the account it belongs to; a reading
-  account can be lost without losing anything else. Its own bookmarks,
-  notifications and home timeline are therefore not the user's, and no tool
-  reads them.
+  account can be lost without losing anything else.
 - **Nothing writes to X**: no post, reply, like, repost, follow, bookmark or
   direct message, now or later. The only write is a download to the machine.
   A reader that cannot write cannot be steered into acting on the account.
@@ -609,11 +610,12 @@ and every entry point checks them the same way.
   several, the call fails as `invalid_argument` and lists them. One account is
   the common case and needs no argument, while several never depend on which
   one a tool guesses.
-- **The account read never contacts X.** It reports each label from its
-  state: where its cookies come from, whether X refused them, a running rate
-  limit, the reads used against the caps, and the one command to run when
-  something is wrong. A read that spent a request to learn this would spend
-  the budget it reports.
+- **The account read never contacts X or FxTwitter.** It reports each label
+  from its state: where its cookies come from, whether X refused them, a
+  running rate limit, the reads used against the caps, and the one command to
+  run when something is wrong; and FxTwitter's reads used against its daily
+  cap and a running cooldown. A read that spent a request to learn this would
+  spend the budget it reports.
 
 ## The cookies
 
@@ -645,10 +647,13 @@ and every entry point checks them the same way.
   off, and the reply's kinds are mapped to the error codes above. A tool never
   starts the bridge itself.
 - **The engine is [twscrape](https://github.com/vladkens/twscrape), pinned
-  with hashes.** `engine install` builds the venv from the requirements file
-  the package ships and installs nothing unpinned, so a release always runs
-  the engine it was tested with. Its `curl` extra gives requests a browser's
-  TLS fingerprint.
+  with hashes.** `engine install` builds the venv with
+  [uv](https://docs.astral.sh/uv/) on a uv-managed Python of the version the
+  package pins, from the requirements file the package ships, and installs
+  nothing unpinned, so a release always runs the engine and the interpreter
+  it was tested with. twscrape follows X's rotating query ids and its
+  transaction-id header within days, which no client of this package's own
+  would, and gives requests a browser's TLS fingerprint through curl-cffi.
 - **The session lives only in the bridge's memory.** twscrape keeps its
   account pool in SQLite; the bridge holds it in an in-memory database, so
   nothing of the session is written to disk, and the pool is built again for
@@ -687,17 +692,50 @@ and every entry point checks them the same way.
   instructions, and nothing in them is followed. Long text is clipped, and the
   result says where.
 
-## Public post lookups
+## Sources
 
-- **Public posts can be looked up without signing in**, through FxTwitter's
-  public API. A lookup needs no reading account and counts against none of
-  its caps, so a caller can confirm many posts without spending the account.
-- **The lookup carries no cookies and reaches only `api.fxtwitter.com`**,
-  following redirects only there, with each reply's size capped.
-- **Lookups are paced on their own**: a gap, a daily cap, a time budget per
+- **Two sources answer reads: FxTwitter and the reading account.**
+  [FxTwitter's public API](https://docs.fxembed.com/api/introduction) answers
+  posts, threads, profiles, timelines, search and more without signing in;
+  the reading account answers everything in scope through the engine.
+- **FxTwitter is read first.** With `source: auto`, the default, a read
+  FxTwitter offers goes there, and falls to the reading account only when
+  FxTwitter is down, is limiting the package, does not offer that read, or
+  the target is protected. A read there spends none of the reading account's
+  caps or risk, and someone with no reading account can still read whatever
+  FxTwitter answers.
+- **"Not found" from FxTwitter is the answer**, not a reason to try the
+  reading account: a deleted post would otherwise cost a read of X every
+  time it is asked about.
+- **A call can name its source.** `source: fxtwitter` reads only there and
+  fails for a read FxTwitter does not offer; `source: account` reads only
+  through the reading account and fails when none is set up. A caller that
+  needs X's own answer, or must not reach a third party, says so per call.
+- **Every result names the source that answered it.** FxTwitter's answers
+  are its operator's, read through its own access to X, and a caller weighing
+  them should know which it got.
+- **A cursor is opaque and stays with its source and read**: it continues
+  only there, since the two sources page differently.
+- **The `account_only` setting turns FxTwitter off**, so reads go only to
+  the reading account. What a read asks for (a search's words, the handles
+  read) reaches a third party, which some users must not allow. It is a
+  setting that turns something off rather than one that is on by default,
+  since a boolean flag only turns a setting on.
+- **Every read of FxTwitter carries no cookies and reaches only
+  `api.fxtwitter.com`**, following redirects only there, with a `User-Agent`
+  and each reply's size capped.
+- **FxTwitter is paced on its own**: a gap, a daily cap, a time budget per
   call and a cooldown after a 429, kept in state of their own beside the
-  labels. FxTwitter is a free third-party service, and a polite client keeps
-  it answering.
+  labels and counted apart from them. It is a free service with no promise
+  of uptime, and a polite client keeps it answering.
+
+## What the tools never read
+
+- **Spaces, and likes**: who liked a post and an account's likes, which X
+  made private in 2024. Like counts stay in every post.
+- **The reading account's own data**: its home timeline, notifications,
+  bookmarks, lists, direct messages and scheduled posts. They are the reading
+  account's, not the user's, and nothing a caller asks for needs them.
 
 ## Files
 
@@ -708,9 +746,11 @@ and every entry point checks them the same way.
 ## Toolsets
 
 - **One per domain**: `account` (`x_account_read`), `posts` (`x_post_read`),
-  `users` (`x_user_read`), `public` (`x_public_read`) and `media`
+  `users` (`x_user_read`), `lists` (`x_list_read`), `communities`
+  (`x_community_read`), `trends` (`x_trend_read`) and `media`
   (`x_media_download`), beside the starter's `grants`. Each domain's methods
-  are settled with its tools.
-- **All five are on by default.** None does anything a person would not expect
-  from an X reader, and the one write puts files only under the download
-  directory.
+  are settled with its tools. A lookup of posts by URL or id is a method of
+  `x_post_read`, not a tool of its own, since both sources answer it.
+- **All seven are on by default.** None does anything a person would not
+  expect from an X reader, and the one write puts files only under the
+  download directory.

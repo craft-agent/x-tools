@@ -3,9 +3,10 @@
 Unofficial, read-only X tools for coding agents: search, threads, profiles, media and post checks.
 
 > [!WARNING]
-> These tools read X the way its web app does, signed in with a browser
-> session's cookies, not through the X API. X's automation rules forbid it,
-> and the account can be locked or suspended at any time, read-only use
+> These tools do not use the X API. They read through FxTwitter, a
+> third-party service, and through a reading account that calls X's web app
+> endpoints, signed in with a browser session's cookies. X's terms forbid
+> scraping and its automation rules can end in suspension, read-only use
 > included. Sign in with a separate reading account whose loss you accept,
 > never your main one. The cookies are the account: whoever holds them is
 > signed in as it until X ends the session. Nothing here posts, replies,
@@ -191,6 +192,21 @@ A tool adds what a grant can also limit by declaring `bounds` and giving
 `measure(args, context)` in its spec; see the
 [conventions](docs/conventions.md#writes-no-one-is-there-to-approve).
 
+## Sources
+
+Every read tries [FxTwitter's public API](https://docs.fxembed.com/api/introduction)
+first, which needs no account, and falls to your reading account only when
+FxTwitter is down, is limiting the package, does not offer that read, or the
+post or account is protected. A post FxTwitter reports as not found is not
+asked again through the reading account. Without a reading account, you can
+read whatever FxTwitter answers.
+
+A call can name its source with `source`: `fxtwitter` reads only there,
+`account` only through the reading account. Every result says which source
+answered it. What a read asks for (a search's words, the handles read)
+reaches FxTwitter's operator; the `account_only` [setting](#settings) keeps
+every read on the reading account.
+
 ## Reading accounts
 
 A label names one reading account, `default` unless you name another; a call
@@ -200,9 +216,12 @@ only one. Each label keeps its state in its own directory,
 [setting](#settings): by default `$XDG_STATE_HOME/x-tools`, else
 `~/.local/state/x-tools`. The engine's venv lives under the state root too.
 
-The tools read X through [twscrape](https://github.com/vladkens/twscrape),
-which needs Python; the package builds it a venv from the hash-pinned
-requirements it ships. Every read of a label is paced: one at a time across
+The reading account reads X through
+[twscrape](https://github.com/vladkens/twscrape), which needs Python; the
+package builds it a venv with [uv](https://docs.astral.sh/uv/) from the
+hash-pinned requirements it ships, so uv must be installed. Search needs a
+reading account with a verified phone number: X refuses it to other
+accounts. Every read of a label is paced: one at a time across
 every process sharing the state directory, `read_gap_seconds` apart, and at
 most `reads_per_hour` and `reads_per_day`. Past a cap, or while X
 rate-limits the account, a call fails as `rate_limited` without contacting X.
@@ -215,9 +234,6 @@ label's cookie file (mode 600), which the login command writes from standard
 input. The value is `auth_token=…; ct0=…`, copied from a browser signed in to
 x.com as the reading account. Never pass it as an argument. Codex forwards no
 variable whose name depends on a label, so use the file there.
-
-Public posts can also be looked up through FxTwitter's public API, with no
-reading account and outside its caps.
 
 ## Adding a tool
 
@@ -390,6 +406,7 @@ variable, and an option or setting wins over the variable too.
 | `read_gap_seconds` | `--read-gap-seconds` | `X_TOOLS_READ_GAP_SECONDS` | the least time between two reads of X by one account; default 5                                                     |
 | `reads_per_hour`   | `--reads-per-hour`   | `X_TOOLS_READS_PER_HOUR`   | the most reads of X by one account in an hour; default 30                                                           |
 | `reads_per_day`    | `--reads-per-day`    | `X_TOOLS_READS_PER_DAY`    | the most reads of X by one account in 24 hours; default 200                                                         |
+| `account_only`     | `--account-only`     | `X_TOOLS_ACCOUNT_ONLY`     | reads go only to the reading account, never to FxTwitter; off by default                                            |
 
 `X_TOOLS_GRANT_KEY` is a variable only, never a flag or a plugin
 option. Use at least 32 characters, for example from `openssl rand -hex 32`,
