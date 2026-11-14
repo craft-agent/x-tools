@@ -62,6 +62,8 @@ jobs:
         run: pnpm test
       - name: Test the Hermes plugin
         run: python -m unittest discover -s src/hermes/tests
+      - name: Test the engine bridge
+        run: python -m unittest discover -s engine/tests
       - name: Build
         run: pnpm run build
       - name: Check the plugin manifest

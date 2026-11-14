@@ -177,6 +177,17 @@ settings only to the MCP server, so they list every skill whatever the
 settings select. OpenCode V1 registers no skills, and its copied skills are
 all listed too.
 
+### Account (`account`)
+
+On by default. Reports what a reading account needs, from local state only.
+
+| Tool             | What it does                                                                                             | Class |
+| ---------------- | -------------------------------------------------------------------------------------------------------- | ----- |
+| `x_account_read` | the engine, each reading account's cookies, X's remembered verdicts and reads used, and what to run next | read  |
+
+It never contacts X or FxTwitter and costs no read. When something needs a
+person, it returns the one command to run.
+
 ### Grants (`grants`)
 
 Off by default. Delegates bounded writes for jobs where no person can answer.
@@ -211,10 +222,17 @@ every read on the reading account.
 
 A label names one reading account, `default` unless you name another; a call
 picks one with its `account` argument, which may be left out while there is
-only one. Each label keeps its state in its own directory,
-`<state root>/<label>/` (mode 700), under the `state_dir`
-[setting](#settings): by default `$XDG_STATE_HOME/x-tools`, else
-`~/.local/state/x-tools`. The engine's venv lives under the state root too.
+only one. Everything the package keeps lives under the `state_dir`
+[setting](#settings), by default `$XDG_STATE_HOME/x-tools`, else
+`~/.local/state/x-tools`, in one directory per role (each mode 700):
+
+```text
+<state root>/
+  accounts/<label>/   one reading account: its cookie file, reads, lock, X's verdicts
+  engine/venv/        the engine, shared by every account
+  fxtwitter/          FxTwitter's reads and cooldown
+  grants/             grants and their log, unless grants_dir moves them
+```
 
 The reading account reads X through
 [twscrape](https://github.com/vladkens/twscrape), which needs Python; the
@@ -234,6 +252,26 @@ label's cookie file (mode 600), which the login command writes from standard
 input. The value is `auth_token=…; ct0=…`, copied from a browser signed in to
 x.com as the reading account. Never pass it as an argument. Codex forwards no
 variable whose name depends on a label, so use the file there.
+
+### Setting up
+
+These are commands a person runs, never tools. `x-tools-cli` is the package's
+command line (`npx -y -p @craftsamo/x-tools@<version> x-tools-cli …`), and
+each takes `--state-dir <path>` when the state root is not the default.
+
+```sh
+x-tools-cli engine install             # build the engine's venv with uv
+x-tools-cli engine status              # is the engine there, on the pinned versions?
+x-tools-cli login [--account <label>]  # store the cookies, read from standard input
+x-tools-cli remove --account <label>   # delete a reading account's local state
+```
+
+`login` asks for the cookie string without echoing it on a terminal, or reads
+it piped, checks that both `auth_token` and `ct0` are there and writes the
+label's cookie file; it sends nothing to X, so the first read checks the
+cookies. With `X_TOOLS_COOKIES_<LABEL>` set it reads nothing and stores
+nothing. `remove` asks you to type the label back, or takes `--yes` where
+there is no terminal; the variable, if you set one, stays yours to unset.
 
 ## Adding a tool
 
@@ -403,9 +441,9 @@ variable, and an option or setting wins over the variable too.
 | `emoji`            | —                    | —                          | Hermes only: the emoji shown beside each toolset, by toolset name (`""` for none)                                   |
 | `require_plugins`  | —                    | —                          | Hermes only: the plugins that must be loaded; while one is not, every write is refused before it is approved        |
 | `state_dir`        | `--state-dir`        | `X_TOOLS_STATE_DIR`        | every reading account's state and the engine; default `$XDG_STATE_HOME/x-tools`, else `~/.local/state/x-tools`      |
-| `read_gap_seconds` | `--read-gap-seconds` | `X_TOOLS_READ_GAP_SECONDS` | the least time between two reads of X by one account; default 5                                                     |
-| `reads_per_hour`   | `--reads-per-hour`   | `X_TOOLS_READS_PER_HOUR`   | the most reads of X by one account in an hour; default 30                                                           |
-| `reads_per_day`    | `--reads-per-day`    | `X_TOOLS_READS_PER_DAY`    | the most reads of X by one account in 24 hours; default 200                                                         |
+| `read_gap_seconds` | `--read-gap-seconds` | `X_TOOLS_READ_GAP_SECONDS` | the least time between two reads of X by one account; default 5, 1 to 3600                                          |
+| `reads_per_hour`   | `--reads-per-hour`   | `X_TOOLS_READS_PER_HOUR`   | the most reads of X by one account in an hour; default 30, 1 to 60                                                  |
+| `reads_per_day`    | `--reads-per-day`    | `X_TOOLS_READS_PER_DAY`    | the most reads of X by one account in 24 hours; default 200, 1 to 500                                               |
 | `account_only`     | `--account-only`     | `X_TOOLS_ACCOUNT_ONLY`     | reads go only to the reading account, never to FxTwitter; off by default                                            |
 
 `X_TOOLS_GRANT_KEY` is a variable only, never a flag or a plugin

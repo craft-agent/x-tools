@@ -1,0 +1,4 @@
+# The engine the reading account runs on. `pnpm run engine:lock` compiles
+# requirements.lock from this file with hashes for macOS and Linux; change the
+# pin here, run it, and change TWSCRAPE_VERSION in the code to match.
+twscrape==0.21.0

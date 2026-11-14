@@ -74,10 +74,14 @@ export const NO_GRANTS: GrantContext = {
   key: undefined,
 }
 
+/** The state directory of test settings that name none. */
+export const DEFAULT_STATE_DIR = join(tmpdir(), "mcp-test-state-unused")
+
 export const settings = (overrides: Partial<EntrySettings> = {}): EntrySettings => ({
   confirm: "harness",
   options: {},
   grants: NO_GRANTS,
+  state_dir: DEFAULT_STATE_DIR,
   ...overrides,
 })
 

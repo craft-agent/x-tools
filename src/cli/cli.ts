@@ -17,15 +17,19 @@ import {
 import { errorBody } from "../entry/errors"
 import { approvalOf, checkPin } from "../entry/pin"
 import { PROJECT_PROFILE, type EntryProfile } from "../entry/profile"
+import { createToolRuntime } from "../entry/runtime"
 import { parseTargetSettings, parseToolSettings, promptLanguage, type ToolEntrySettings } from "../entry/settings"
+import { stateDirContext } from "../entry/state-dir"
 import { visible } from "../entry/visible"
 import { promptTranslator, promptWords } from "../entry/words"
 import { PROJECT } from "../project"
+import { ACCOUNT_FLAG, usageError } from "./command-args"
+import { EXIT_FAILED, EXIT_OK, EXIT_USAGE, type CommandIo } from "./command-io"
+import { runEngineCommand } from "./engine"
+import { runLoginCommand } from "./login"
+import { runRemoveCommand } from "./remove"
 
-/** The exit codes of a command: it did its work, the work failed, or the command line was wrong. */
-export const EXIT_OK = 0
-export const EXIT_FAILED = 1
-export const EXIT_USAGE = 2
+export { EXIT_FAILED, EXIT_OK, EXIT_USAGE }
 
 const PROGRAM = PROJECT.cli
 const CWD_FLAG = "--cwd"
@@ -34,23 +38,11 @@ const HARNESS_LANGUAGE_FLAG = "--harness-language"
 const PIN_FLAG = "--pin"
 
 /** What a command line needs from its surroundings; `main.ts` wires the process, a test supplies its own. */
-export type CliIo = {
+export type CliIo = CommandIo & {
   /** The tools the command line can select from. */
   specs: ToolSpec[]
-  /** Where the `<envPrefix>_*` settings fall back to. */
-  env: Record<string, string | undefined>
-  /** The settings' environment prefix and the toolsets; defaults to this package's. */
-  profile?: EntryProfile
   /** Reads standard input to its end; an empty string when there is none. */
   readStdin(): Promise<string>
-  /** Receives the JSON document a command answers with. */
-  stdout(text: string): void
-  /** Receives usage lines and the detail of unexpected errors. */
-  stderr(text: string): void
-  /** Where the tools are installed: never a call's working tree. */
-  ownDir?: string
-  /** Stops a running tool when it aborts. */
-  signal?: AbortSignal
   /** How long a call's description may take; defaults to DESCRIBE_TIMEOUT_MS. */
   describeTimeoutMs?: number
   /** The translations of the tools' words, per language, for `target`; defaults to none, which keeps its answer in English. */
@@ -58,16 +50,12 @@ export type CliIo = {
 }
 
 /** What a call's context takes from the command line: the package's own settings and the grants' context. */
-type CallSettings = Pick<ToolEntrySettings, "options" | "grants">
+type CallSettings = Pick<ToolEntrySettings, "options" | "grants" | "state_dir">
 
 type Command =
   | { name: "list"; selected: ToolSpec[] }
   | ({ name: "run"; toolId: string; cwd: string; pin: string | undefined; selected: ToolSpec[] } & CallSettings)
   | ({ name: "target"; toolId: string; cwd: string; language: string | undefined } & CallSettings)
-
-function usageError(message: string): ToolError {
-  return new ToolError("invalid_argument", message)
-}
 
 /** Splits `<flag> <value>` or `<flag>=<value>` from the remaining arguments; the last one given wins. */
 function takeFlag(argv: string[], flag: string): { value: string | undefined; rest: string[] } {
@@ -97,6 +85,7 @@ function parseCommand(argv: string[], io: Pick<CliIo, "specs" | "env" | "profile
       selected: selectTools(io.specs, settings, profile.toolsets),
       options: settings.options,
       grants: settings.grants,
+      state_dir: settings.state_dir,
     }
   }
   const [name, ...args] = argv
@@ -106,7 +95,7 @@ function parseCommand(argv: string[], io: Pick<CliIo, "specs" | "env" | "profile
   if (name !== "run" && name !== "target") {
     const given = name === undefined ? "No command given" : `Unknown command "${name}"`
     throw usageError(
-      `${given}; use list, run <tool-id> --cwd <dir> [${PIN_FLAG} <hex>] or target <tool-id> --cwd <dir> [${LANGUAGE_FLAG} <tag>] [${HARNESS_LANGUAGE_FLAG} <tag>].`,
+      `${given}; use list, run <tool-id> --cwd <dir> [${PIN_FLAG} <hex>], target <tool-id> --cwd <dir> [${LANGUAGE_FLAG} <tag>] [${HARNESS_LANGUAGE_FLAG} <tag>], engine install|status, login [${ACCOUNT_FLAG} <label>] or remove ${ACCOUNT_FLAG} <label>.`,
     )
   }
 
@@ -166,18 +155,25 @@ async function readArguments(io: CliIo): Promise<unknown> {
   }
 }
 
+/** The context a `run` or `target` call gets from the command line and the process's surroundings. */
+function callContext(command: Extract<Command, { name: "run" | "target" }>, io: CliIo) {
+  return {
+    cwd: command.cwd,
+    ownDir: io.ownDir,
+    options: command.options,
+    grants: command.grants,
+    ...stateDirContext(command),
+    runtime: createToolRuntime(io),
+    signal: io.signal,
+  }
+}
+
 async function runTool(command: Extract<Command, { name: "run" }>, io: CliIo): Promise<number> {
   const spec = command.selected.find((candidate) => candidate.id === command.toolId)
   if (!spec) return writeError(io, "invalid_argument", `Unknown tool "${command.toolId}".`)
   try {
     const args = await readArguments(io)
-    const ctx = {
-      cwd: command.cwd,
-      ownDir: io.ownDir,
-      options: command.options,
-      grants: command.grants,
-      signal: io.signal,
-    }
+    const ctx = callContext(command, io)
     await checkPin(spec, args, ctx, command.pin, io.describeTimeoutMs)
     const result = await invoke(spec, args, ctx)
     writeJson(io, { result })
@@ -195,13 +191,7 @@ async function targetOf(command: Extract<Command, { name: "target" }>, io: CliIo
   if (!spec) return writeError(io, "invalid_argument", `Unknown tool "${command.toolId}".`)
   try {
     const args = await readArguments(io)
-    const ctx = {
-      cwd: command.cwd,
-      ownDir: io.ownDir,
-      options: command.options,
-      grants: command.grants,
-      signal: io.signal,
-    }
+    const ctx = callContext(command, io)
     const t = promptTranslator(io.translations ?? {}, command.language)
     const approval = await approvalOf(spec, args, ctx, io.describeTimeoutMs, t)
     if (approval.refused) {
@@ -230,6 +220,13 @@ async function targetOf(command: Extract<Command, { name: "target" }>, io: CliIo
 
 function errorDetail(error: unknown): string {
   return error instanceof Error ? (error.stack ?? error.message) : String(error)
+}
+
+/** The commands a person runs to manage the package's local state, which print plain text rather than a JSON document. */
+const PERSON_COMMANDS: Partial<Record<string, (argv: string[], io: CliIo) => Promise<number>>> = {
+  engine: runEngineCommand,
+  login: runLoginCommand,
+  remove: runRemoveCommand,
 }
 
 /**
@@ -263,9 +260,14 @@ function errorDetail(error: unknown): string {
  * as flags or `<envPrefix>_<OPTION>` variables, and `run` and `target` hand their
  * values to the tool as `options`. Standard output carries only the JSON document; a
  * mistake in the command line is one line on standard error and `EXIT_USAGE`.
- * Resolves to the exit code.
+ * `engine`, `login` and `remove` are for a person managing the engine and the
+ * reading accounts' local state (see `PERSON_COMMANDS`). Resolves to the exit code.
  */
 export async function runCli(argv: string[], io: CliIo): Promise<number> {
+  const [name, ...rest] = argv
+  const personCommand = name !== undefined && Object.hasOwn(PERSON_COMMANDS, name) ? PERSON_COMMANDS[name] : undefined
+  if (personCommand) return personCommand(rest, io)
+
   let command: Command
   try {
     command = parseCommand(argv, io)

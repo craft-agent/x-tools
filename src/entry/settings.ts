@@ -1,4 +1,3 @@
-import { homedir } from "node:os"
 import { isAbsolute, join, resolve as resolvePath, sep } from "node:path"
 import {
   ToolError,
@@ -12,12 +11,20 @@ import {
 } from "../core"
 import { PROJECT } from "../project"
 import { PROJECT_PROFILE, type EntryProfile } from "./profile"
+import {
+  STATE_DIR_OPTION,
+  defaultStateDir,
+  homeOf,
+  stateDirSettings,
+  type Environment,
+  type StateDirSettings,
+} from "./state-dir"
 
 /** Who asks the person before an administrative tool acts: the harness, or the tool through the client's form. */
 export type ConfirmMode = "harness" | "elicitation"
 
-/** The tool settings, the values of the package's own settings (`options`, possibly empty) and the grants' context. */
-export type ToolEntrySettings = ToolSettings & { options: ToolOptions; grants: GrantContext }
+/** The tool settings, the values of the package's own settings (`options`, possibly empty), the grants' context and the resolved state directory. */
+export type ToolEntrySettings = ToolSettings & { options: ToolOptions; grants: GrantContext } & StateDirSettings
 
 /** The tool settings, who confirms, the values of the package's own settings and the grants' context. */
 export type EntrySettings = ToolEntrySettings & { confirm: ConfirmMode }
@@ -163,13 +170,6 @@ function parseNumber(value: string, source: string): number {
 
 /** A setting given as text, and where it came from, for error messages. */
 type SettingText = { text: string; source: string }
-
-type Environment = Record<string, string | undefined>
-
-/** The home directory: `env.HOME` when absolute, else the user's. */
-function homeOf(env: Environment): string {
-  return env.HOME !== undefined && isAbsolute(env.HOME) ? env.HOME : homedir()
-}
 
 /** The path a `path` setting names: `~` stands for the home directory, the result must be absolute and is normalized. */
 function absolutePath(text: string, source: string, env: Environment): string {
@@ -322,9 +322,7 @@ function grantKey(env: Environment, profile: EntryProfile): Buffer | undefined {
 
 /** Where grants are kept unless a setting says: `<XDG_STATE_HOME>/<name>/grants` when that variable is absolute, else under `<home>/.local/state`. */
 function defaultGrantsDir(env: Environment, profile: EntryProfile): string {
-  const state = env.XDG_STATE_HOME
-  const stateHome = state !== undefined && isAbsolute(state) ? state : join(homeOf(env), ".local", "state")
-  return join(stateHome, profile.name, GRANTS_DIR_NAME)
+  return join(defaultStateDir(env, profile), GRANTS_DIR_NAME)
 }
 
 /** The grants' context from the `unattended` and `grants_dir` settings, as parsed (`undefined` when unset), and the environment's key. */
@@ -371,7 +369,7 @@ export function parseTargetSettings(
   argv: string[],
   env: Record<string, string | undefined>,
   profile: EntryProfile = PROJECT_PROFILE,
-): Pick<ToolEntrySettings, "options" | "grants"> {
+): Pick<ToolEntrySettings, "options" | "grants" | "state_dir"> {
   const flags = readFlags(argv, profile)
   const known = profileOptions(profile)
   const other = Object.keys(flags).find(
@@ -380,7 +378,35 @@ export function parseTargetSettings(
   if (other !== undefined) {
     throw new ToolError("invalid_argument", `Unknown option "${settingOptions(profile)[other]!.flag}".`)
   }
-  return { options: optionsFrom(flags, env, profile), grants: grantsFromText(flags, env, profile) }
+  const options = optionsFrom(flags, env, profile)
+  return {
+    options,
+    grants: grantsFromText(flags, env, profile),
+    ...stateDirSettings(options, env, profile),
+  }
+}
+
+/**
+ * Reads the state directory from the command line and environment of a
+ * command that takes no other setting (`engine`): any other flag is
+ * `invalid_argument`, and no other setting's variable is read, so one that is
+ * wrong cannot stop the command.
+ */
+export function parseStateDirOnly(
+  argv: string[],
+  env: Record<string, string | undefined>,
+  profile: EntryProfile = PROJECT_PROFILE,
+): StateDirSettings {
+  const only: EntryProfile = {
+    ...profile,
+    options: Object.fromEntries(Object.entries(profileOptions(profile)).filter(([name]) => name === STATE_DIR_OPTION)),
+  }
+  const flags = readFlags(argv, only)
+  const other = Object.keys(flags).find((name) => name !== STATE_DIR_OPTION)
+  if (other !== undefined) {
+    throw new ToolError("invalid_argument", `Unknown option "${settingOptions(only)[other]!.flag}".`)
+  }
+  return stateDirSettings(optionsFrom(flags, env, only), env, only)
 }
 
 /**
@@ -397,10 +423,12 @@ export function parseSettings(
   const flags = readFlags(argv, profile)
   const value = (name: OptionName) => settingText(name, flags, env, profile)
 
+  const options = optionsFrom(flags, env, profile)
   const settings: EntrySettings = {
     confirm: "harness",
-    options: optionsFrom(flags, env, profile),
+    options,
     grants: grantsFromText(flags, env, profile),
+    ...stateDirSettings(options, env, profile),
   }
   const toolsets = value("toolsets")
   if (toolsets) settings.toolsets = checkToolsets(splitList(toolsets.text), toolsets.source, profile.toolsets)
@@ -595,7 +623,11 @@ export function settingsFromOptions(
     (value) => pathOption("grants_dir", value, env),
     (text) => pathText(text, env),
   )
-  const settings: PluginSettings = { options: parsedOptions, grants: grantContext(unattended, grantsDir, env, profile) }
+  const settings: PluginSettings = {
+    options: parsedOptions,
+    grants: grantContext(unattended, grantsDir, env, profile),
+    ...stateDirSettings(parsedOptions, env, profile),
+  }
   const toolsets = resolve(
     "toolsets",
     (value) => toolsetsOption(value, profile.toolsets),

@@ -24,7 +24,22 @@
         "X_TOOLS_CONFIRM",
         "X_TOOLS_UNATTENDED",
         "X_TOOLS_GRANTS_DIR",
-        "X_TOOLS_GRANT_KEY"
+        "X_TOOLS_STATE_DIR",
+        "X_TOOLS_READ_GAP_SECONDS",
+        "X_TOOLS_READS_PER_HOUR",
+        "X_TOOLS_READS_PER_DAY",
+        "X_TOOLS_GRANT_KEY",
+        "XDG_STATE_HOME",
+        "HTTP_PROXY",
+        "HTTPS_PROXY",
+        "ALL_PROXY",
+        "NO_PROXY",
+        "http_proxy",
+        "https_proxy",
+        "all_proxy",
+        "no_proxy",
+        "SSL_CERT_FILE",
+        "SSL_CERT_DIR"
       ]
     }
   }

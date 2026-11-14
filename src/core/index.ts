@@ -1,5 +1,6 @@
 export { ToolError, isAbortError, isToolError, type ErrorCode, type ErrorDetails, type JsonValue } from "./errors"
 export { abortError, exec, type ExecOptions, type ExecResult } from "./exec"
+export { exitFailure, run, type RunOptions } from "./runner"
 export {
   MAX_GRANT_DAYS,
   GRANTS_TOOLSET,
@@ -21,6 +22,7 @@ export {
   type GrantRefusal,
 } from "./grant"
 export { isWithin } from "./paths"
+export type { ToolRuntime } from "./runtime"
 export { ANY_TARGET, writeTargets } from "./targets"
 export {
   REQUIRES_USER_INTERACTION,

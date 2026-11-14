@@ -1,14 +1,14 @@
 import { describe, expect, test } from "bun:test"
 import { settingsFromOptions } from "./settings"
-import { DEFAULT_GRANTS, failure, profile } from "./settings.testing"
+import { DEFAULT_GRANTS, DEFAULT_STATE, failure, profile } from "./settings.testing"
 
 const fromOptions = (options: Record<string, unknown> | undefined, env: Record<string, string | undefined> = {}) =>
   settingsFromOptions(options, env, profile)
 
 describe("settingsFromOptions", () => {
   test("gives no setting for no options", () => {
-    expect(fromOptions(undefined)).toEqual({ options: {}, grants: DEFAULT_GRANTS })
-    expect(fromOptions({})).toEqual({ options: {}, grants: DEFAULT_GRANTS })
+    expect(fromOptions(undefined)).toEqual({ options: {}, grants: DEFAULT_GRANTS, ...DEFAULT_STATE })
+    expect(fromOptions({})).toEqual({ options: {}, grants: DEFAULT_GRANTS, ...DEFAULT_STATE })
   })
 
   test("reads each option", () => {
@@ -21,6 +21,7 @@ describe("settingsFromOptions", () => {
       exclude_tools: ["a"],
       options: {},
       grants: DEFAULT_GRANTS,
+      ...DEFAULT_STATE,
     })
     expect(fromOptions({ toolsets: "all" }).toolsets).toBe("all")
     expect(fromOptions({ toolsets: ["alpha", "all"] }).toolsets).toBe("all")
@@ -39,6 +40,7 @@ describe("settingsFromOptions", () => {
       tools: ["a", "b"],
       options: {},
       grants: DEFAULT_GRANTS,
+      ...DEFAULT_STATE,
     })
     expect(fromOptions({ toolsets: ["beta"], read_only: false }, { ...env, DEMO_READ_ONLY: "yes" })).toEqual({
       toolsets: ["beta"],
@@ -46,6 +48,7 @@ describe("settingsFromOptions", () => {
       tools: ["a", "b"],
       options: {},
       grants: DEFAULT_GRANTS,
+      ...DEFAULT_STATE,
     })
   })
 

@@ -65,3 +65,4 @@ tagged `v<version>`; consumers pin a tag or the same npm version.
 - Single file: `bun test <path>`
 - `pnpm run build && pnpm run smoke`, `pnpm run manifests:check`
 - Hermes plugin (Python): `python -m unittest discover -s src/hermes/tests`
+- Engine bridge (Python): `python -m unittest discover -s engine/tests`

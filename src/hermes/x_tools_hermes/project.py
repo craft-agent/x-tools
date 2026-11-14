@@ -17,7 +17,7 @@ TOOLSET_EMOJI: dict[str, str] = {}
 #: The settings the tools themselves read: each snake_case name and a type (``text``, ``boolean``, ``number``,
 #: ``list``, ``path`` or ``paths``) or a dict with ``type`` and optional bounds (``integer``, ``min``, ``max``),
 #: as in ``src/project.ts``. Write OPTIONS on one line with double quotes. A setting ``a_b`` becomes ``--a-b``.
-OPTIONS: dict[str, str | dict[str, object]] = {}
+OPTIONS: dict[str, str | dict[str, object]] = {"state_dir": "path", "read_gap_seconds": {"type": "number", "integer": True, "min": 1, "max": 3600}, "reads_per_hour": {"type": "number", "integer": True, "min": 1, "max": 60}, "reads_per_day": {"type": "number", "integer": True, "min": 1, "max": 500}}
 
 __all__ = [
     "CLI_NAME",

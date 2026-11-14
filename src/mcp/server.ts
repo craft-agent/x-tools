@@ -23,19 +23,21 @@ import {
 } from "../core"
 import { errorBody } from "../entry/errors"
 import { PROJECT_PROFILE } from "../entry/profile"
+import { createToolRuntime, type RuntimeOptions } from "../entry/runtime"
 import type { EntrySettings } from "../entry/settings"
+import { stateDirContext } from "../entry/state-dir"
 import { PROJECT } from "../project"
 import { elicitationConfirm } from "./confirm"
 import { createWorkingDirResolver, SANDBOX_STATE_META } from "./roots"
 
 const DEFAULT_VERSION = "0.0.0"
 
-export type ServerOptions = {
+export type ServerOptions = RuntimeOptions & {
   /** The directory a call runs in when the client names no usable call directory or root; defaults to `process.cwd`. */
   cwd?: () => string
   /** Where the tools are installed: never a call's working tree, so client directories inside it are skipped. */
   ownDir?: string
-  /** The toolsets the settings select from; defaults to this package's. */
+  /** The toolsets the settings select from; defaults to the profile's. */
   toolsets?: Toolsets
   /** The version the server reports; defaults to `0.0.0`. */
   version?: string
@@ -79,7 +81,8 @@ export function createServer(specs: ToolSpec[], settings: EntrySettings, options
     { capabilities: { tools: {}, experimental: { [SANDBOX_STATE_META]: {} } } },
   )
   const workingDir = createWorkingDirResolver(server, options.cwd ?? (() => process.cwd()), options.ownDir)
-  const toolsets = options.toolsets ?? PROJECT_PROFILE.toolsets
+  const runtime = createToolRuntime(options)
+  const toolsets = options.toolsets ?? (options.profile ?? PROJECT_PROFILE).toolsets
   const selected = new Map(selectTools(specs, settings, toolsets).map((spec) => [spec.id, spec]))
   const tools = [...selected.values()].map(describeTool)
 
@@ -96,6 +99,8 @@ export function createServer(specs: ToolSpec[], settings: EntrySettings, options
         ownDir: options.ownDir,
         options: settings.options,
         grants: settings.grants,
+        ...stateDirContext(settings),
+        runtime,
         signal: extra.signal,
         ...(confirm && { confirm }),
       }

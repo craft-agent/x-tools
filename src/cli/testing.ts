@@ -10,7 +10,7 @@ import { runCli, type CliIo } from "./cli"
 export const PROFILE: EntryProfile = {
   name: "demo-tools",
   envPrefix: "DEMO",
-  options: { [NOTE_OPTION]: "text" },
+  options: { [NOTE_OPTION]: "text", state_dir: "path" },
   toolsets: { names: ["alpha", "beta"], defaults: ["alpha"] },
 }
 

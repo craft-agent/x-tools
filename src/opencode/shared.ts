@@ -16,17 +16,15 @@ import { DESCRIBE_TIMEOUT_MS, approvalPrompt, standIn, type ShownDescription } f
 import { errorText } from "../entry/errors"
 import { ANY_RESOURCE } from "../entry/permission"
 import { checkPin } from "../entry/pin"
-import { PROJECT_PROFILE, type EntryProfile } from "../entry/profile"
+import { PROJECT_PROFILE } from "../entry/profile"
+import type { RuntimeOptions } from "../entry/runtime"
 import { settingsFromOptions } from "../entry/settings"
+import { stateDirContext, type StateDirContext } from "../entry/state-dir"
 import { promptTranslator, promptWords } from "../entry/words"
 import type { PluginOptions } from "./types"
 
 /** What a plugin takes from its surroundings; each has a default, and a test supplies its own. */
-export type PluginDeps = {
-  /** Where the `<envPrefix>_*` settings fall back to; defaults to `process.env`. */
-  env?: Record<string, string | undefined>
-  /** The settings' environment prefix and the toolsets; defaults to this package's. */
-  profile?: EntryProfile
+export type PluginDeps = RuntimeOptions & {
   /** The directory holding `<name>/SKILL.md` files, for the harness version that registers skills. */
   skillsDir?: URL | string
   /** Where the plugin is installed: never a call's working tree. */
@@ -73,13 +71,13 @@ export function needsPermission(spec: Pick<ToolSpec, "class">): boolean {
 /**
  * The tools the plugin options (and the environment behind them) select from
  * `specs`, the translator of the prompt language they set over the plugin's
- * translations, the package's own settings and the grants' context.
+ * translations, the package's own settings, the grants' context and the state directory.
  */
 export function selectedTools(
   specs: ToolSpec[],
   options: PluginOptions | undefined,
   deps: PluginDeps,
-): { specs: ToolSpec[]; translator: Translator; options: ToolOptions; grants: GrantContext } {
+): { specs: ToolSpec[]; translator: Translator; options: ToolOptions; grants: GrantContext } & StateDirContext {
   const profile = deps.profile ?? PROJECT_PROFILE
   const settings = settingsFromOptions(options, deps.env ?? process.env, profile)
   return {
@@ -87,6 +85,7 @@ export function selectedTools(
     translator: promptTranslator(deps.translations ?? {}, settings.language),
     options: settings.options,
     grants: settings.grants,
+    ...stateDirContext(settings),
   }
 }
 
