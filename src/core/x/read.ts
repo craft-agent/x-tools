@@ -25,6 +25,8 @@ export type ReadOptions = {
   now?: () => number
   /** Waits `ms`, rejecting with an `AbortError` when `signal` aborts; defaults to a timer. */
   sleep?: (ms: number, signal?: AbortSignal) => Promise<void>
+  /** How long to wait for another read of the label to finish; defaults to 90 s. */
+  lockWaitMs?: number
 }
 
 /**
@@ -66,6 +68,7 @@ export async function readX(options: ReadOptions): Promise<{ account: string; da
     signal: options.signal,
     now: options.now,
     sleep: options.sleep,
+    lockWaitMs: options.lockWaitMs,
   })
   return { account: paths.label, data: engineOutcome(reply, now()) }
 }
