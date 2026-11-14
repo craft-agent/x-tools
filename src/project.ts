@@ -21,6 +21,9 @@ export const PROJECT = {
     read_gap_seconds: { type: "number", integer: true, min: 1, max: 3600 },
     reads_per_hour: { type: "number", integer: true, min: 1, max: 60 },
     reads_per_day: { type: "number", integer: true, min: 1, max: 500 },
+    fxtwitter_gap_ms: { type: "number", integer: true, min: 100, max: 60000 },
+    fxtwitter_reads_per_day: { type: "number", integer: true, min: 1, max: 5000 },
+    fxtwitter_cooldown_seconds: { type: "number", integer: true, min: 60, max: 21600 },
   } as Readonly<Record<string, OptionSpec>>,
   /** The environment variables the tools read besides the settings, which Codex forwards to the server after them. */
   toolVariables: ["XDG_STATE_HOME", ...NETWORK_PASS] as readonly string[],

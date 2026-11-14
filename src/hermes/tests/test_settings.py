@@ -58,7 +58,15 @@ class OptionFlagsTest(unittest.TestCase):
     def test_the_package_has_the_state_dir_and_pacing_options(self) -> None:
         self.assertEqual(
             list(project.OPTIONS),
-            ["state_dir", "read_gap_seconds", "reads_per_hour", "reads_per_day"],
+            [
+                "state_dir",
+                "read_gap_seconds",
+                "reads_per_hour",
+                "reads_per_day",
+                "fxtwitter_gap_ms",
+                "fxtwitter_reads_per_day",
+                "fxtwitter_cooldown_seconds",
+            ],
         )
 
     def test_each_kind_becomes_a_flag(self) -> None:

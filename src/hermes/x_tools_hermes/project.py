@@ -17,7 +17,7 @@ TOOLSET_EMOJI: dict[str, str] = {}
 #: The settings the tools themselves read: each snake_case name and a type (``text``, ``boolean``, ``number``,
 #: ``list``, ``path`` or ``paths``) or a dict with ``type`` and optional bounds (``integer``, ``min``, ``max``),
 #: as in ``src/project.ts``. Write OPTIONS on one line with double quotes. A setting ``a_b`` becomes ``--a-b``.
-OPTIONS: dict[str, str | dict[str, object]] = {"state_dir": "path", "read_gap_seconds": {"type": "number", "integer": True, "min": 1, "max": 3600}, "reads_per_hour": {"type": "number", "integer": True, "min": 1, "max": 60}, "reads_per_day": {"type": "number", "integer": True, "min": 1, "max": 500}}
+OPTIONS: dict[str, str | dict[str, object]] = {"state_dir": "path", "read_gap_seconds": {"type": "number", "integer": True, "min": 1, "max": 3600}, "reads_per_hour": {"type": "number", "integer": True, "min": 1, "max": 60}, "reads_per_day": {"type": "number", "integer": True, "min": 1, "max": 500}, "fxtwitter_gap_ms": {"type": "number", "integer": True, "min": 100, "max": 60000}, "fxtwitter_reads_per_day": {"type": "number", "integer": True, "min": 1, "max": 5000}, "fxtwitter_cooldown_seconds": {"type": "number", "integer": True, "min": 60, "max": 21600}}
 
 __all__ = [
     "CLI_NAME",
