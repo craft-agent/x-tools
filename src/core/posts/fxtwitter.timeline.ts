@@ -3,7 +3,7 @@ import type { FxClient } from "../fxtwitter/client"
 import type { FxOutcome } from "../sources/choose"
 import { readFxRoute } from "./fxtwitter"
 import { pageOf, pagePath, type FxListAsk, type FxListRoute } from "./fxtwitter.list"
-import { POST_NOT_FOUND } from "./shape"
+import { POST_NOT_FOUND, type PostGone } from "./shape"
 import type { Tab } from "./schemas"
 import { goneTimeline, type TimelinePage } from "./timeline.shape"
 
@@ -23,14 +23,17 @@ function timelineRoute(handle: string, tab: Tab): FxListRoute {
   return { path: `/2/profile/${encodeURIComponent(handle)}/${path}`, params }
 }
 
+/** What a `404` of a route of an account comes to: `not_found`, with `suspended` as its reason when FxTwitter's body says the account is. */
+export function missingAccountGone(body: unknown): PostGone {
+  const said = notFoundBodySchema.safeParse(body)
+  return said.success && said.data.reason === "suspended"
+    ? { status: "not_found", reason: "suspended" }
+    : POST_NOT_FOUND
+}
+
 /** What a `404` came to: `not_found`, final, with `suspended` as its reason when FxTwitter says the account is. */
 function notFoundOutcome(body: unknown): FxOutcome<TimelinePage> {
-  const said = notFoundBodySchema.safeParse(body)
-  const suspended = said.success && said.data.reason === "suspended"
-  return {
-    kind: "answer",
-    value: goneTimeline(suspended ? { status: "not_found", reason: "suspended" } : POST_NOT_FOUND),
-  }
+  return { kind: "answer", value: goneTimeline(missingAccountGone(body)) }
 }
 
 /**
