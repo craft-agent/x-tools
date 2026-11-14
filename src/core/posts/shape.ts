@@ -18,7 +18,7 @@ export const MAX_LINKS = 5
 export const MEDIA_TYPES = ["photo", "video", "gif"] as const
 
 /** A post id: decimal digits only, as X's ids are. */
-const POST_ID = /^[0-9]{1,20}$/
+export const POST_ID_PATTERN = /^[0-9]{1,20}$/
 
 /** A number field a source may leave out or send as `null`. */
 export const nullishNumber = z.number().nullish()
@@ -136,7 +136,7 @@ export function unexpectedReplyError(source: Answerer, options?: { status?: numb
 
 /** Throws `invalid_argument` unless `id` is a decimal string of 1 to 20 digits. */
 export function assertPostId(id: string): void {
-  if (!POST_ID.test(id)) {
+  if (!POST_ID_PATTERN.test(id)) {
     throw new ToolError("invalid_argument", "A post id is a decimal number of 1 to 20 digits.")
   }
 }
