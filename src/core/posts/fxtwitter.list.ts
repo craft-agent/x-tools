@@ -37,7 +37,7 @@ const listBodySchema = z.object({
 const refusalSchema = z.object({ message: z.string().nullish(), error: z.string().nullish() })
 
 /** The path and query string of one page: the route's fields, then `count`, then `cursor` when continuing. */
-function pagePath({ path, params }: FxListRoute, { limit, cursor }: FxListAsk): string {
+export function pagePath({ path, params }: FxListRoute, { limit, cursor }: FxListAsk): string {
   const query = new URLSearchParams({ ...params, count: String(limit) })
   if (cursor !== null) query.set("cursor", cursor)
   return `${path}?${query}`
@@ -55,7 +55,7 @@ export function nextCursor(rowCount: number, cursor: z.infer<typeof cursorFieldS
 }
 
 /** The page a `200` body holds: its statuses (other rows, such as tombstones, are skipped), at most `limit`, read as the reply arrived. */
-function pageOf(body: unknown, { limit, now }: FxListAsk): Page<Post> {
+export function pageOf(body: unknown, { limit, now }: FxListAsk): Page<Post> {
   const parsed = listBodySchema.safeParse(body)
   if (!parsed.success) throw unexpectedReplyError("fxtwitter", { status: HTTP_OK })
   const { results, cursor } = parsed.data

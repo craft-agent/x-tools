@@ -24,7 +24,7 @@ import {
 const STATUS_PATH = "/2/status/"
 
 export const HTTP_OK = 200
-const HTTP_UNAUTHORIZED = 401
+export const HTTP_UNAUTHORIZED = 401
 export const HTTP_NOT_FOUND = 404
 
 /** A media item of a kind this package reads. */
@@ -165,7 +165,7 @@ function statusField(body: unknown, httpStatus: number): unknown {
 }
 
 /** What a `401` came to: a `fallback` for the reading account, `protected`. */
-const PROTECTED_OUTCOME: FxOutcome<PostGone> = {
+export const PROTECTED_OUTCOME: FxOutcome<PostGone> = {
   kind: "fallback",
   reason: "protected",
   value: { status: "protected", reason: "protected" },

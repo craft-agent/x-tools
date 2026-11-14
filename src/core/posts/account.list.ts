@@ -24,8 +24,24 @@ export type AccountListAsk = {
   account?: string
 }
 
-/** What the bridge's `search` operation gives: the posts as its `post` operation does, and the cursor of the next page. */
-const searchDataSchema = z.object({ posts: z.array(z.unknown()), cursor: z.string().nullish() })
+/** What the bridge's operations that page posts (`search`, `timeline`) give: the posts as its `post` operation does, and the cursor of the next page. */
+const pageDataSchema = z.object({ posts: z.array(z.unknown()), cursor: z.string().nullish() })
+
+/**
+ * The page the bridge's data `data` holds: its posts, at most `limit`, each in
+ * the shape of any post, read at the time `now` tells; its cursor is the next
+ * page's own, null at the end. Data off the operations' shape throws
+ * `upstream_error` with `details.reason` `unexpected_reply`.
+ */
+export function accountPageOf(data: unknown, limit: number, now: () => number): Page<Post> {
+  const parsed = pageDataSchema.safeParse(data)
+  if (!parsed.success) throw unexpectedReplyError("account", { cause: parsed.error })
+  const readAt = readAtOf(now())
+  return {
+    items: parsed.data.posts.slice(0, limit).map((row) => accountPost(row, readAt)),
+    cursor: parsed.data.cursor ?? null,
+  }
+}
 
 /**
  * Reads one page of a search through the reading account: one paced read of
@@ -47,11 +63,5 @@ export async function readListFromAccount(
     { query, product: PRODUCTS[feed], count: limit, cursor },
     account,
   )
-  const parsed = searchDataSchema.safeParse(data)
-  if (!parsed.success) throw unexpectedReplyError("account", { cause: parsed.error })
-  const readAt = readAtOf(reader.now())
-  return {
-    items: parsed.data.posts.slice(0, limit).map((row) => accountPost(row, readAt)),
-    cursor: parsed.data.cursor ?? null,
-  }
+  return accountPageOf(data, limit, reader.now)
 }
