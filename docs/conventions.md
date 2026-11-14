@@ -754,6 +754,11 @@ and every entry point checks them the same way.
   come.** A page is one request to its source, and X ends most pages near 20
   items whatever is asked, so a caller follows `cursor`, not the count.
   Filling a page would spend several reads of the reading account.
+- **A read whose sources set the page size themselves takes no `limit`**: a
+  conversation's replies come as the source cuts them, and cutting a page
+  would lose the posts between it and the next cursor. It still takes
+  `cursor`. A read that is no list, such as a thread, which X gives whole,
+  takes neither `limit` nor `cursor`.
 - **Through the reading account a page is one request to X and counts as one
   read**, so the pacing and the caps count pages as they count every read.
 - **A list asks FxTwitter for `limit` items**, under the one reply cap: a
