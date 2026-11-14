@@ -181,9 +181,9 @@ all listed too.
 
 On by default. Reports what a reading account needs, from local state only.
 
-| Tool             | What it does                                                                                             | Class |
-| ---------------- | -------------------------------------------------------------------------------------------------------- | ----- |
-| `x_account_read` | the engine, each reading account's cookies, X's remembered verdicts and reads used, and what to run next | read  |
+| Tool             | What it does                                                                                                                                  | Class |
+| ---------------- | --------------------------------------------------------------------------------------------------------------------------------------------- | ----- |
+| `x_account_read` | the engine, each reading account's cookies, X's remembered verdicts and reads used, and what to run next; FxTwitter's reads used and cooldown | read  |
 
 It never contacts X or FxTwitter and costs no read. When something needs a
 person, it returns the one command to run.

@@ -49,6 +49,13 @@ account.
   by priority: `engine_install`, then `login`, then `wait`; `hint` says it in a
   sentence and `recovery_command` is the command for it (none for `wait`).
 
+`fxtwitter` tells how reads of FxTwitter, the third party read before the
+reading account, stand: `reads_last_day` against `reads_per_day`, and a
+`cooldown_until` while it is ahead. During a cooldown or past the cap, reads go
+to the reading account, or wait when none is set up; do not work around it.
+`enabled: false` means the person turned FxTwitter off with the `account_only`
+setting, so every read uses the reading account.
+
 ## Recovery belongs to the person
 
 `engine install`, `login` and `remove` are commands a person runs in a

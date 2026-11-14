@@ -42,7 +42,19 @@ export const accountSchema = z.object({
   recovery_command: z.string().nullable(),
 })
 
-export const accountReadOutput = z.object({ engine: engineSchema, accounts: z.array(accountSchema) })
+export const fxtwitterSchema = z.object({
+  enabled: z.boolean(),
+  reads_last_day: z.number(),
+  reads_per_day: z.number(),
+  cooldown_until: z.string().nullable(),
+})
+
+export const accountReadOutput = z.object({
+  engine: engineSchema,
+  fxtwitter: fxtwitterSchema,
+  accounts: z.array(accountSchema),
+})
 
 export type AccountRow = z.infer<typeof accountSchema>
 export type EngineRow = z.infer<typeof engineSchema>
+export type FxtwitterRow = z.infer<typeof fxtwitterSchema>
