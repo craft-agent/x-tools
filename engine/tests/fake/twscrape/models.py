@@ -123,3 +123,28 @@ def parse_tweets(rep) -> Generator[Tweet, None, None]:
                 yield from walk(item)
 
     return walk(rep.json())
+
+
+def parse_users(rep) -> Generator[User, None, None]:
+    """The users of a timeline's reply, in the order the JSON holds them, each once, as twscrape's `parse_users`.
+
+    A user object is a dict of type `User` with a `rest_id`; its fields come from `api.PEOPLE`, and an id that is not
+    there is skipped.
+    """
+    from . import api
+
+    seen: set[str] = set()
+
+    def walk(node) -> Generator[User, None, None]:
+        if isinstance(node, dict):
+            rest_id = str(node.get("rest_id"))
+            if node.get("__typename") == "User" and rest_id not in seen and int(rest_id) in api.PEOPLE:
+                seen.add(rest_id)
+                yield api.PEOPLE[int(rest_id)]
+            for value in node.values():
+                yield from walk(value)
+        elif isinstance(node, list):
+            for item in node:
+                yield from walk(item)
+
+    return walk(rep.json())

@@ -59,6 +59,9 @@ SEARCH_QUERY_SOURCE = "typed_query"
 SEARCH_TOGGLES = {"withArticleRichContentState": False}
 BOTTOM_CURSOR = "Bottom"
 SHOW_MORE_THREADS_CURSOR = "ShowMoreThreads"
+# The arguments of `user_search`, and the product of the SearchTimeline request that finds accounts.
+USER_SEARCH_ARGS = frozenset({"query", "count", "cursor"})
+USER_SEARCH_PRODUCT = "People"
 # The arguments of `conversation` and `thread`.
 CONVERSATION_ARGS = frozenset({"id", "ranking", "cursor"})
 CONVERSATION_RANKINGS = ("Likes", "Recency")
@@ -143,6 +146,8 @@ TIMELINE_VARIABLES = {
 TIMELINE_TOGGLES = {"media": {"withArticlePlainText": False}}
 # A timeline entry's id ends in the id of the post it holds: `tweet-<id>`, or `<prefix>-<id>` in a module.
 ENTRY_POST_ID = re.compile(r"-([0-9]+)$")
+# A people-search entry's id is `user-<id>`.
+ENTRY_USER_ID = re.compile(r"^user-([0-9]+)$")
 # What twscrape's `AbortReqError` says once X has answered 404 to a request three times, which X does to a
 # search by an account whose phone is not verified (twscrape issue 367).
 SEARCH_REFUSED_MARKER = "XClIdGen"
@@ -517,6 +522,36 @@ async def read_search(api: Any, args: dict) -> dict:
     with refusal_of_search():
         timeline, tweets = await request_page(api, operation_id, variables, toggles=SEARCH_TOGGLES)
     return paged_posts(api, timeline, tweets, args["count"])
+
+
+def check_user_search_args(args: dict) -> None:
+    """Raises `Failure("invalid_request")` unless `args` holds exactly a query, a count and a cursor.
+
+    The messages name the argument and never repeat its value.
+    """
+    if set(args) != USER_SEARCH_ARGS:
+        raise Failure("invalid_request", "args does not hold exactly query, count and cursor")
+    check_query_arg(args["query"])
+    check_count_arg(args["count"])
+    check_cursor_arg(args["cursor"])
+
+
+@operation("user_search", check_args=check_user_search_args)
+async def read_user_search(api: Any, args: dict) -> dict:
+    """One page of X's search for accounts: `{"users": [...], "cursor": str | None}`, in the timeline's order.
+
+    The one request is made here, with the variables twscrape's `search_user` sends (but for `count`): twscrape pages
+    inside a generator. The users are those X lists, as many as `count`; a page without users has no cursor. Raises
+    `Failure("search_refused")` as `search` does, since X refuses both alike.
+    """
+    operation_id = importlib.import_module(f"{TWSCRAPE}.api").OP_SearchTimeline
+    parse_users = importlib.import_module(f"{TWSCRAPE}.models").parse_users
+    variables = search_variables(args, USER_SEARCH_PRODUCT)
+    with refusal_of_search():
+        rep, timeline = await request_timeline(api, operation_id, variables, toggles=SEARCH_TOGGLES)
+    users = in_timeline_order(api, timeline, list(parse_users(rep)), ENTRY_USER_ID)[: args["count"]]
+    cursor = api._get_cursor(timeline, BOTTOM_CURSOR) if users else None
+    return {"users": [user_of(user) for user in users], "cursor": cursor}
 
 
 def check_conversation_args(args: dict) -> None:
