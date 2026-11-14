@@ -14,6 +14,7 @@ const ACCOUNT_READ = "x_account_read"
 const POST_READ = "x_post_read"
 /** A read that only the reading account may answer, so that it never reaches FxTwitter or X: none is set up in the empty state directory. */
 const POST_VIEW_ACCOUNT_ONLY = { method: "view", posts: ["20"], source: "account" }
+const POST_SEARCH_ACCOUNT_ONLY = { method: "search", query: "x", source: "account" }
 const stateDir = mkdtempSync(join(tmpdir(), "mcp-smoke-"))
 
 function expectReadTool(tools, name) {
@@ -56,9 +57,13 @@ async function listTools() {
 
     expectReadTool(tools, POST_READ)
     const view = await client.callTool({ name: POST_READ, arguments: POST_VIEW_ACCOUNT_ONLY })
-    expectErrorResult(view, "not_found", `${POST_READ} with no reading account`)
+    expectErrorResult(view, "not_found", `${POST_READ} view with no reading account`)
+    const search = await client.callTool({ name: POST_READ, arguments: POST_SEARCH_ACCOUNT_ONLY })
+    expectErrorResult(search, "not_found", `${POST_READ} search with no reading account`)
     expectEmptyStateDir("Post reads without a reading account must not create state.")
-    console.log(`${POST_READ} view with source account gives a not_found error result and no reading account.`)
+    console.log(
+      `${POST_READ} view and search with source account give a not_found error result and no reading account.`,
+    )
 
     const result = await client.callTool({ name: UNKNOWN_TOOL })
     expectErrorResult(result, "invalid_argument", UNKNOWN_TOOL)
