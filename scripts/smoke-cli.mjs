@@ -1,43 +1,22 @@
-import { Client } from "@modelcontextprotocol/sdk/client/index.js"
-import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js"
 import { spawnSync } from "node:child_process"
 import { mkdtempSync, readdirSync, rmSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { fileURLToPath } from "node:url"
+import {
+  ACCOUNT_ONLY_READS,
+  ACCOUNT_READ,
+  EXIT_USAGE,
+  POST_READ,
+  UNKNOWN_TOOL,
+  USER_READ,
+  expect,
+  mcpToolNames,
+} from "./smoke-shared.mjs"
 
 const CLI = fileURLToPath(new URL("../dist/cli.js", import.meta.url))
-const SERVER = fileURLToPath(new URL("../dist/mcp.js", import.meta.url))
 const EXIT_FAILED = 1
-const EXIT_USAGE = 2
-const UNKNOWN_TOOL = "unknown_nonexistent_read"
-const ACCOUNT_READ = "x_account_read"
-const POST_READ = "x_post_read"
-const USER_READ = "x_user_read"
-/** The reads of each tool that only the reading account may answer, so they never reach FxTwitter or X: none is set up in the empty state directory. */
-const ACCOUNT_ONLY_READS = [
-  [
-    POST_READ,
-    [
-      { method: "view", posts: ["20"], source: "account" },
-      { method: "search", query: "x", source: "account" },
-      { method: "conversation", post: "20", source: "account" },
-      { method: "timeline", handle: "x", source: "account" },
-    ],
-  ],
-  [
-    USER_READ,
-    [
-      { method: "view", handle: "x", source: "account" },
-      { method: "search", query: "x", source: "account" },
-    ],
-  ],
-]
 const stateDir = mkdtempSync(join(tmpdir(), "cli-smoke-"))
-
-function expect(condition, message) {
-  if (!condition) throw new Error(message)
-}
 
 function cli(args, input = "") {
   return spawnSync(process.execPath, [CLI, ...args, "--state-dir", stateDir], {
@@ -45,19 +24,6 @@ function cli(args, input = "") {
     input,
     stdio: "pipe",
   })
-}
-
-/** The tool names the MCP server lists with the given settings; it draws on the same registry as the CLI. */
-async function mcpToolNames(args) {
-  const client = new Client({ name: "smoke", version: "0.0.0" })
-  await client.connect(
-    new StdioClientTransport({ command: process.execPath, args: [SERVER, ...args, "--state-dir", stateDir] }),
-  )
-  try {
-    return (await client.listTools()).tools.map((tool) => tool.name)
-  } finally {
-    await client.close()
-  }
 }
 
 async function listsTheServersTools() {
@@ -72,7 +38,7 @@ async function listsTheServersTools() {
         `Expected ${label} to include ${id} as a read tool, got ${run.stdout}`,
       )
     }
-    const expected = await mcpToolNames(settings)
+    const expected = await mcpToolNames(stateDir, settings)
     expect(
       JSON.stringify(listed.map((tool) => tool.id)) === JSON.stringify(expected),
       `Expected ${label} to give ${JSON.stringify(expected)}, got ${run.stdout}`,

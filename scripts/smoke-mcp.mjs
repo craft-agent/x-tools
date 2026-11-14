@@ -4,34 +4,9 @@ import { spawnSync } from "node:child_process"
 import { mkdtempSync, readdirSync, rmSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
-import { fileURLToPath } from "node:url"
 import { PLUGIN_NAME } from "./package-name.mjs"
+import { ACCOUNT_ONLY_READS, ACCOUNT_READ, EXIT_USAGE, SERVER, UNKNOWN_TOOL } from "./smoke-shared.mjs"
 
-const SERVER = fileURLToPath(new URL("../dist/mcp.js", import.meta.url))
-const EXIT_USAGE = 2
-const UNKNOWN_TOOL = "unknown_nonexistent_read"
-const ACCOUNT_READ = "x_account_read"
-const POST_READ = "x_post_read"
-const USER_READ = "x_user_read"
-/** The reads of each tool that only the reading account may answer, so they never reach FxTwitter or X: none is set up in the empty state directory. */
-const ACCOUNT_ONLY_READS = [
-  [
-    POST_READ,
-    [
-      { method: "view", posts: ["20"], source: "account" },
-      { method: "search", query: "x", source: "account" },
-      { method: "conversation", post: "20", source: "account" },
-      { method: "timeline", handle: "x", source: "account" },
-    ],
-  ],
-  [
-    USER_READ,
-    [
-      { method: "view", handle: "x", source: "account" },
-      { method: "search", query: "x", source: "account" },
-    ],
-  ],
-]
 const stateDir = mkdtempSync(join(tmpdir(), "mcp-smoke-"))
 
 function expectReadTool(tools, name) {

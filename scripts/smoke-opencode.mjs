@@ -1,41 +1,13 @@
-import { Client } from "@modelcontextprotocol/sdk/client/index.js"
-import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js"
 import { mkdtempSync, readdirSync, rmSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { fileURLToPath, pathToFileURL } from "node:url"
 import { PLUGIN_NAME } from "./package-name.mjs"
+import { ACCOUNT_ONLY_READS, ACCOUNT_READ, POST_READ, USER_READ, expect, mcpToolNames } from "./smoke-shared.mjs"
 
 const PLUGIN = fileURLToPath(new URL("../dist/opencode.js", import.meta.url))
-const SERVER = fileURLToPath(new URL("../dist/mcp.js", import.meta.url))
-const ACCOUNT_READ = "x_account_read"
-const POST_READ = "x_post_read"
-const USER_READ = "x_user_read"
-/** The reads of each tool that only the reading account may answer, so they never reach FxTwitter or X: none is set up in the empty state directory. */
-const ACCOUNT_ONLY_READS = [
-  [
-    POST_READ,
-    [
-      { method: "view", posts: ["20"], source: "account" },
-      { method: "search", query: "x", source: "account" },
-      { method: "conversation", post: "20", source: "account" },
-      { method: "timeline", handle: "x", source: "account" },
-    ],
-  ],
-  [
-    USER_READ,
-    [
-      { method: "view", handle: "x", source: "account" },
-      { method: "search", query: "x", source: "account" },
-    ],
-  ],
-]
 const NO_ACCOUNT_ERROR = /^not_found: No reading account is set up yet\./
 const stateDir = mkdtempSync(join(tmpdir(), "opencode-smoke-"))
-
-function expect(condition, message) {
-  if (!condition) throw new Error(message)
-}
 
 /** Expects `result` to say that no account is set up and the engine is missing, as an empty state directory does. */
 function expectEmptyAccounts(result, label) {
@@ -67,17 +39,6 @@ async function checkOpenCodeVersion(version, readAccount, runTool) {
   }
 }
 
-/** The tool names the MCP server lists with default settings; it draws on the same registry as the plugin. */
-async function mcpToolNames() {
-  const client = new Client({ name: "smoke", version: "0.0.0" })
-  await client.connect(new StdioClientTransport({ command: process.execPath, args: [SERVER, "--state-dir", stateDir] }))
-  try {
-    return (await client.listTools()).tools.map((tool) => tool.name).sort()
-  } finally {
-    await client.close()
-  }
-}
-
 try {
   const { default: plugin } = await import(pathToFileURL(PLUGIN).href)
   expect(
@@ -87,7 +48,7 @@ try {
   expect(plugin.id === PLUGIN_NAME, `Expected the plugin to be named ${PLUGIN_NAME}, got ${plugin.id}.`)
   console.log(`The OpenCode plugin ${plugin.id} exports setup and server.`)
 
-  const expected = await mcpToolNames()
+  const expected = (await mcpToolNames(stateDir)).sort()
   for (const name of [ACCOUNT_READ, POST_READ, USER_READ]) {
     expect(expected.includes(name), `Expected the MCP registry to include ${name}.`)
   }
@@ -134,7 +95,10 @@ try {
     async () => JSON.parse(await tool[ACCOUNT_READ].execute({}, v1Ctx)),
     (name, args) => tool[name].execute(args, v1Ctx),
   )
-  expect(readdirSync(stateDir).length === 0, "Account and post reads must not create state.")
+  expect(
+    readdirSync(stateDir).length === 0,
+    "Reads through a reading account that is not set up must not create state.",
+  )
   console.log(`server returns ${served.length} tools; V1 and V2 read no accounts from an empty state directory.`)
 } catch (error) {
   console.error(error)
