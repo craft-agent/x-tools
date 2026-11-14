@@ -37,8 +37,14 @@ describe("x_user_read", () => {
     for (const word of [
       "`view`",
       "`search`",
+      "`followers`",
+      "`following`",
+      "`reposters`",
       "`handle`",
       "`query`",
+      "`post`",
+      "7 days",
+      "likes",
       "`cursor`",
       "`limit`",
       "`verified_type`",
@@ -54,7 +60,9 @@ describe("x_user_read", () => {
   test("refuses an argument it does not know, and a method it does not have", async () => {
     for (const args of [
       { method: "view", handle: "ada", extra: 1 },
-      { method: "followers", handle: "ada" },
+      { method: "followers", handle: "ada", post: "20" },
+      { method: "reposters", post: "20", handle: "ada" },
+      { method: "likes", post: "20" },
       { handle: "ada" },
     ]) {
       expect(await rejected(invoke(xUserRead, args, h.context()))).toMatchObject({ code: "invalid_argument" })
@@ -71,6 +79,9 @@ describe("x_user_read", () => {
     for (const args of [
       { method: "view", handle: "ada" },
       { method: "search", query: "slow reading" },
+      { method: "followers", handle: "ada" },
+      { method: "following", handle: "ada" },
+      { method: "reposters", post: "20" },
     ]) {
       expect(await rejected(invoke(xUserRead, { ...args, source: "account" }, h.context()))).toMatchObject({
         code: "not_found",
