@@ -3,7 +3,7 @@ import type { FxClient } from "../fxtwitter/client"
 import type { FxOutcome } from "../sources/choose"
 import { readFxRoute } from "./fxtwitter"
 import { pageOf, pagePath, type FxListAsk, type FxListRoute } from "./fxtwitter.list"
-import { POST_NOT_FOUND } from "./shape"
+import { POST_NOT_FOUND, type PostGone } from "./shape"
 import type { Tab } from "./schemas"
 import { goneTimeline, type TimelinePage } from "./timeline.shape"
 
@@ -17,20 +17,42 @@ const TAB_ROUTES: Readonly<Record<Tab, FxListRoute>> = {
 /** What FxTwitter says of an account it does not find: `suspended` in its `reason` for one that is. */
 const notFoundBodySchema = z.object({ reason: z.string().nullish() })
 
+/** The path of a profile route on FxTwitter's v2 API. */
+export function profilePath(handle: string, suffix = ""): string {
+  return `/2/profile/${encodeURIComponent(handle)}${suffix}`
+}
+
 /** The route that reads `tab` of the account `handle`. */
 function timelineRoute(handle: string, tab: Tab): FxListRoute {
   const { path, params } = TAB_ROUTES[tab]
-  return { path: `/2/profile/${encodeURIComponent(handle)}/${path}`, params }
+  return { path: profilePath(handle, `/${path}`), params }
 }
 
-/** What a `404` came to: `not_found`, final, with `suspended` as its reason when FxTwitter says the account is. */
-function notFoundOutcome(body: unknown): FxOutcome<TimelinePage> {
+/** What a `404` of a route of an account comes to: `not_found`, with `suspended` as its reason when FxTwitter's body says the account is. */
+function missingAccountGone(body: unknown): PostGone {
   const said = notFoundBodySchema.safeParse(body)
-  const suspended = said.success && said.data.reason === "suspended"
-  return {
-    kind: "answer",
-    value: goneTimeline(suspended ? { status: "not_found", reason: "suspended" } : POST_NOT_FOUND),
-  }
+  return said.success && said.data.reason === "suspended"
+    ? { status: "not_found", reason: "suspended" }
+    : POST_NOT_FOUND
+}
+
+/**
+ * Reads `path` of FxTwitter as a profile-keyed route: `200` is an `answer` of
+ * what `found` makes of its body; `401` is `protected` and `404` is `not_found`
+ * (or `suspended`), turned into the value through `gone`; anything else, a
+ * body off shape included, is `upstream_error` (`unexpected_reply`).
+ */
+export async function readProfileRoute<T>(
+  client: FxClient,
+  path: string,
+  found: (body: unknown) => T,
+  gone: (gone: PostGone) => T,
+): Promise<FxOutcome<T>> {
+  return readFxRoute(client, path, {
+    found,
+    unauthorized: (outcome) => ({ ...outcome, value: gone(outcome.value) }),
+    notFound: (body) => ({ kind: "answer", value: gone(missingAccountGone(body)) }),
+  })
 }
 
 /**
@@ -58,9 +80,10 @@ export async function readTimelineFromFxTwitter(
   tab: Tab,
   ask: FxListAsk,
 ): Promise<FxOutcome<TimelinePage>> {
-  return readFxRoute(client, pagePath(timelineRoute(handle, tab), ask), {
-    found: (body) => ({ status: "ok", reason: null, ...pageOf(body, ask) }),
-    unauthorized: (outcome) => ({ ...outcome, value: goneTimeline(outcome.value) }),
-    notFound: notFoundOutcome,
-  })
+  return readProfileRoute(
+    client,
+    pagePath(timelineRoute(handle, tab), ask),
+    (body) => ({ status: "ok", reason: null, ...pageOf(body, ask) }),
+    goneTimeline,
+  )
 }

@@ -41,10 +41,24 @@ export function pagePath({ path, params }: FxListRoute, { limit, cursor }: FxLis
   return `${path}?${query}`
 }
 
+/** Whether `row` is of `type`; the other rows, such as tombstones, are skipped. */
+export function isRowOfType(row: unknown, type: string): boolean {
+  return typeof row === "object" && row !== null && "type" in row && row.type === type
+}
+
 /** Whether `row` is a status; the other rows, such as tombstones, are skipped. */
 export function isStatusRow(row: unknown): boolean {
-  return typeof row === "object" && row !== null && "type" in row && row.type === "status"
+  return isRowOfType(row, "status")
 }
+
+/** What a list holds: which rows are its items, the others being skipped, and what an item is made of its row, read at `readAt`. */
+export type FxRows<T> = {
+  isItem: (row: unknown) => boolean
+  read: (row: unknown, readAt: string) => T
+}
+
+/** The rows of a list of posts: its statuses. */
+const POST_ROWS: FxRows<Post> = { isItem: isStatusRow, read: fxPost }
 
 /** The cursor that continues a page of `rowCount` rows: `cursor.bottom`, null when the page has no rows or no usable bottom. */
 export function nextCursor(rowCount: number, cursor: z.infer<typeof cursorFieldSchema>): string | null {
@@ -52,17 +66,22 @@ export function nextCursor(rowCount: number, cursor: z.infer<typeof cursorFieldS
   return rowCount > 0 && bottom ? bottom : null
 }
 
-/** The page a `200` body holds: its statuses (other rows, such as tombstones, are skipped), at most `limit`, read as the reply arrived. */
-export function pageOf(body: unknown, { limit, now }: FxListAsk): Page<Post> {
+/** The page a `200` body holds: the items of its rows (the other rows are skipped), at most `limit`, read as the reply arrived. */
+export function pageOfRows<T>(body: unknown, { limit, now }: FxListAsk, rows: FxRows<T>): Page<T> {
   const parsed = listBodySchema.safeParse(body)
   if (!parsed.success) throw unexpectedReplyError("fxtwitter", { status: HTTP_OK })
   const { results, cursor } = parsed.data
   const readAt = readAtOf(now())
   const items = results
-    .filter(isStatusRow)
+    .filter(rows.isItem)
     .slice(0, limit)
-    .map((row) => fxPost(row, readAt))
+    .map((row) => rows.read(row, readAt))
   return { items, cursor: nextCursor(results.length, cursor) }
+}
+
+/** The page a `200` body holds: its statuses (other rows, such as tombstones, are skipped), at most `limit`, read as the reply arrived. */
+export function pageOf(body: unknown, ask: FxListAsk): Page<Post> {
+  return pageOfRows(body, ask, POST_ROWS)
 }
 
 /** The error of a query FxTwitter refuses, with its words clipped; it names no source, since X would refuse the query too. */
@@ -77,12 +96,12 @@ function refusedQueryError(body: unknown): ToolError {
 }
 
 /**
- * Reads one page of a list of posts of FxTwitter (`GET` of the route's path
- * with its fields, `count` and, when continuing, `cursor`):
+ * Reads one page of a list of FxTwitter (`GET` of the route's path with its
+ * fields, `count` and, when continuing, `cursor`):
  *
- * - `200` with `results`: an `answer`, the rows of `type: "status"` as posts
- *   (the others are skipped) and `cursor.bottom` as the next cursor, null
- *   when the page has no rows.
+ * - `200` with `results`: an `answer`, the items of the rows `rows` takes (the
+ *   others are skipped) and `cursor.bottom` as the next cursor, null when the
+ *   page has no rows.
  * - `404`: an `answer`, an empty page with no cursor, FxTwitter's way to say
  *   there is nothing.
  * - `400`: `invalid_argument` with FxTwitter's words clipped. It does not name
@@ -93,16 +112,26 @@ function refusedQueryError(body: unknown): ToolError {
  *
  * What the client throws (a 429, a 5xx, a failed request) propagates.
  */
-export async function readListFromFxTwitter(
+export async function readRowsFromFxTwitter<T>(
   client: FxClient,
   route: FxListRoute,
   ask: FxListAsk,
-): Promise<FxOutcome<Page<Post>>> {
+  rows: FxRows<T>,
+): Promise<FxOutcome<Page<T>>> {
   return readFxRoute(client, pagePath(route, ask), {
-    found: (body) => pageOf(body, ask),
+    found: (body) => pageOfRows(body, ask, rows),
     notFound: () => ({ kind: "answer", value: { items: [], cursor: null } }),
     badRequest: (body) => {
       throw refusedQueryError(body)
     },
   })
+}
+
+/** Reads one page of a list of posts of FxTwitter, as `readRowsFromFxTwitter` does, its items the rows of `type: "status"`. */
+export async function readListFromFxTwitter(
+  client: FxClient,
+  route: FxListRoute,
+  ask: FxListAsk,
+): Promise<FxOutcome<Page<Post>>> {
+  return readRowsFromFxTwitter(client, route, ask, POST_ROWS)
 }

@@ -786,6 +786,27 @@ and every entry point checks them the same way.
 - **A note's text is other people's text like the post's**, so it is clipped
   like it and the result says where.
 
+## Users
+
+- **A profile holds what the account says of itself and what X counts of it**:
+  `id`, `handle`, `name`, `url`, the `bio`, the `links` (its website, then the
+  links in its bio), `location`, `joined` (ISO 8601 in UTC to the second), the
+  `counts` (`followers`, `following`, `posts`, `likes`, `media`), `protected`,
+  `verified`, `verified_type` and the `avatar_url` and `banner_url`. A field a
+  source does not tell is `null`, never a guess: a count is `null`, not 0.
+- **Every user carries `read_at`**, the time the source answered it, like a
+  post: counts and bios change.
+- **Names, bios, locations and links are other people's text**, so they are
+  clipped and the result says where in `clipped`: a name at 50 characters, a
+  bio at 600 and five links, counted in code points.
+- **`verified` means any checkmark, and `verified_type` says which.** X's
+  legacy mark and its paid one are told apart by sources in different ways, so
+  `verified` is true for either and the kind (`government`, `business`, …,
+  lowercased) is a separate field, `null` when the source tells none.
+- **A profile read through the reading account remembers the handle's user
+  id**, as "Accounts and state" describes, so a `timeline` of that handle
+  through the same label takes one read instead of two.
+
 ## What the tools never read
 
 - **Spaces, and likes**: who liked a post and an account's likes, which X

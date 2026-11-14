@@ -1,30 +1,22 @@
-import { Client } from "@modelcontextprotocol/sdk/client/index.js"
-import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js"
 import { spawnSync } from "node:child_process"
 import { mkdtempSync, readdirSync, rmSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { fileURLToPath } from "node:url"
+import {
+  ACCOUNT_ONLY_READS,
+  ACCOUNT_READ,
+  EXIT_USAGE,
+  POST_READ,
+  UNKNOWN_TOOL,
+  USER_READ,
+  expect,
+  mcpToolNames,
+} from "./smoke-shared.mjs"
 
 const CLI = fileURLToPath(new URL("../dist/cli.js", import.meta.url))
-const SERVER = fileURLToPath(new URL("../dist/mcp.js", import.meta.url))
 const EXIT_FAILED = 1
-const EXIT_USAGE = 2
-const UNKNOWN_TOOL = "unknown_nonexistent_read"
-const ACCOUNT_READ = "x_account_read"
-const POST_READ = "x_post_read"
-/** Reads that only the reading account may answer, so they never reach FxTwitter or X: none is set up in the empty state directory. */
-const POST_ACCOUNT_ONLY_READS = [
-  { method: "view", posts: ["20"], source: "account" },
-  { method: "search", query: "x", source: "account" },
-  { method: "conversation", post: "20", source: "account" },
-  { method: "timeline", handle: "x", source: "account" },
-]
 const stateDir = mkdtempSync(join(tmpdir(), "cli-smoke-"))
-
-function expect(condition, message) {
-  if (!condition) throw new Error(message)
-}
 
 function cli(args, input = "") {
   return spawnSync(process.execPath, [CLI, ...args, "--state-dir", stateDir], {
@@ -34,32 +26,19 @@ function cli(args, input = "") {
   })
 }
 
-/** The tool names the MCP server lists with the given settings; it draws on the same registry as the CLI. */
-async function mcpToolNames(args) {
-  const client = new Client({ name: "smoke", version: "0.0.0" })
-  await client.connect(
-    new StdioClientTransport({ command: process.execPath, args: [SERVER, ...args, "--state-dir", stateDir] }),
-  )
-  try {
-    return (await client.listTools()).tools.map((tool) => tool.name)
-  } finally {
-    await client.close()
-  }
-}
-
 async function listsTheServersTools() {
   for (const settings of [[], ["--toolsets", "all"], ["--toolsets", "all", "--read-only"]]) {
     const label = ["list", ...settings].join(" ")
     const run = cli(["list", ...settings])
     expect(run.status === 0, `Expected exit 0 for ${label}, got ${run.status}: ${run.stderr}`)
     const listed = JSON.parse(run.stdout)
-    for (const id of [ACCOUNT_READ, POST_READ]) {
+    for (const id of [ACCOUNT_READ, POST_READ, USER_READ]) {
       expect(
         listed.some((tool) => tool.id === id && tool.class === "read"),
         `Expected ${label} to include ${id} as a read tool, got ${run.stdout}`,
       )
     }
-    const expected = await mcpToolNames(settings)
+    const expected = await mcpToolNames(stateDir, settings)
     expect(
       JSON.stringify(listed.map((tool) => tool.id)) === JSON.stringify(expected),
       `Expected ${label} to give ${JSON.stringify(expected)}, got ${run.stdout}`,
@@ -97,19 +76,16 @@ function expectCliRunError(tool, input, expectedCode, label) {
   )
 }
 
-function viewsNoPostWithoutAReadingAccount() {
-  for (const args of POST_ACCOUNT_ONLY_READS) {
-    expectCliRunError(
-      POST_READ,
-      JSON.stringify(args),
-      "not_found",
-      `${POST_READ} ${args.method} with no reading account`,
+function readsNothingWithoutAReadingAccount() {
+  for (const [tool, reads] of ACCOUNT_ONLY_READS) {
+    for (const args of reads) {
+      expectCliRunError(tool, JSON.stringify(args), "not_found", `${tool} ${args.method} with no reading account`)
+    }
+    expect(readdirSync(stateDir).length === 0, `${tool} reads without a reading account must not create state`)
+    console.log(
+      `${tool} ${reads.map(({ method }) => method).join(", ")} with source account exit ${EXIT_FAILED} with not_found and no reading account.`,
     )
   }
-  expect(readdirSync(stateDir).length === 0, "Post reads without a reading account must not create state")
-  console.log(
-    `${POST_READ} view, search, conversation and timeline with source account exit ${EXIT_FAILED} with not_found and no reading account.`,
-  )
 }
 
 function rejectsAnUnknownTool() {
@@ -127,7 +103,7 @@ function rejectsConfirm() {
 try {
   await listsTheServersTools()
   readsEmptyAccounts()
-  viewsNoPostWithoutAReadingAccount()
+  readsNothingWithoutAReadingAccount()
   rejectsAnUnknownTool()
   rejectsConfirm()
 } catch (error) {

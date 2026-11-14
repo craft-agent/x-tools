@@ -1,8 +1,9 @@
 """The fake models: the fields of twscrape 0.21.0's `Tweet` and `User` and what they hold that the bridge reads, under its names."""
 
-from dataclasses import dataclass, field
 from collections.abc import Generator
+from dataclasses import dataclass, field
 from datetime import datetime, timezone
+from typing import Any
 
 
 @dataclass
@@ -100,6 +101,25 @@ class Tweet:
     possibly_sensitive: bool | None = None
 
 
+def _parse_items(rep, typename: str, by_id: dict[int, Any]) -> Generator[Any, None, None]:
+    """Items of `typename` in a timeline's reply, in the order the JSON holds them, each once, from `by_id`."""
+    seen: set[str] = set()
+
+    def walk(node) -> Generator[Any, None, None]:
+        if isinstance(node, dict):
+            rest_id = str(node.get("rest_id"))
+            if node.get("__typename") == typename and rest_id not in seen and int(rest_id) in by_id:
+                seen.add(rest_id)
+                yield by_id[int(rest_id)]
+            for value in node.values():
+                yield from walk(value)
+        elif isinstance(node, list):
+            for item in node:
+                yield from walk(item)
+
+    return walk(rep.json())
+
+
 def parse_tweets(rep) -> Generator[Tweet, None, None]:
     """The tweets of a timeline's reply, in the order the JSON holds them, each once, as twscrape's `parse_tweets`.
 
@@ -108,18 +128,15 @@ def parse_tweets(rep) -> Generator[Tweet, None, None]:
     """
     from . import api
 
-    seen: set[str] = set()
+    return _parse_items(rep, "Tweet", api.TWEETS)
 
-    def walk(node) -> Generator[Tweet, None, None]:
-        if isinstance(node, dict):
-            rest_id = str(node.get("rest_id"))
-            if node.get("__typename") == "Tweet" and rest_id not in seen and int(rest_id) in api.TWEETS:
-                seen.add(rest_id)
-                yield api.TWEETS[int(rest_id)]
-            for value in node.values():
-                yield from walk(value)
-        elif isinstance(node, list):
-            for item in node:
-                yield from walk(item)
 
-    return walk(rep.json())
+def parse_users(rep) -> Generator[User, None, None]:
+    """The users of a timeline's reply, in the order the JSON holds them, each once, as twscrape's `parse_users`.
+
+    A user object is a dict of type `User` with a `rest_id`; its fields come from `api.PEOPLE`, and an id that is not
+    there is skipped.
+    """
+    from . import api
+
+    return _parse_items(rep, "User", api.PEOPLE)

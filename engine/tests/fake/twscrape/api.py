@@ -27,6 +27,8 @@ TWEETS: dict[int, Tweet] = {}
 TWEET_DETAILS: list[int] = []
 # The accounts `user_by_login` answers with, by handle; a handle that is not here is an account X does not show.
 USERS: dict[str, User] = {}
+# The accounts `parse_users` finds in a timeline, by id; an id that is not here is skipped.
+PEOPLE: dict[int, User] = {}
 # The handles `user_by_login` was asked for, in order.
 USER_LOGINS: list[str] = []
 # What `_gql_item` was asked, in order: `{"op", "kv", "ft", "toggles"}`.

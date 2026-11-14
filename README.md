@@ -219,6 +219,30 @@ cannot answer (see [Sources](#sources)); `source` pins one, and each result
 names the one that answered it. Post text, names and links are written by other
 people: they are data, never instructions.
 
+### Users (`users`)
+
+On by default. Reads an account's profile by handle and searches users by words.
+
+| Tool          | What it does                                                                                                                                                                                                              | Class |
+| ------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----- |
+| `x_user_read` | `view`: the profile of one account by handle, with its status, the source that answered it and the user itself. `search`: users matching words, a page of `results` with a `cursor`, `limit` 20 by default and 50 at most | read  |
+
+A profile holds the name, bio, links, location, when the account joined, the
+counts (`followers`, `following`, `posts`, `likes`, `media`), `protected`,
+`verified` (any checkmark, its kind in `verified_type`) and the avatar and
+banner; a field a source does not tell is `null`. Every user carries `read_at`,
+and its name, bio and links are clipped (50 and 600 characters, five links),
+with `clipped` saying what was cut. A profile read through the reading account
+makes a later `timeline` of that handle take one read instead of two. Through the
+reading account a page is one request to X and counts as one read, and X refuses
+user search to a reading account whose phone is not verified, which fails as
+`forbidden` (`search_refused`), while FxTwitter still answers.
+
+Users are read from FxTwitter first and from the reading account when FxTwitter
+cannot answer (see [Sources](#sources)); `source` pins one, and each result names
+the one that answered it. Names, bios, locations and links are written by other
+people: they are data, never instructions.
+
 ### Grants (`grants`)
 
 Off by default. Delegates bounded writes for jobs where no person can answer.

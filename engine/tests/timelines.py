@@ -27,6 +27,21 @@ def tweet_entry(id: int, prefix: str = "tweet") -> dict:
     }
 
 
+def user_entry(id: int, prefix: str = "user") -> dict:
+    """An entry that holds the user `id`, with the id in its entry id as X writes it in a people search."""
+    return {
+        "entryId": f"{prefix}-{id}",
+        "sortIndex": str(id),
+        "content": {
+            "entryType": "TimelineTimelineItem",
+            "itemContent": {
+                "itemType": "TimelineUser",
+                "user_results": {"result": {"__typename": "User", "rest_id": str(id)}},
+            },
+        },
+    }
+
+
 def module_entry(*ids: int) -> dict:
     """A module entry, which twscrape's `_gql_entries` leaves out, holding the tweets `ids`."""
     return {
