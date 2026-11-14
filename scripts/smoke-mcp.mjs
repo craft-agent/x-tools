@@ -16,6 +16,7 @@ const POST_READ = "x_post_read"
 const POST_VIEW_ACCOUNT_ONLY = { method: "view", posts: ["20"], source: "account" }
 const POST_SEARCH_ACCOUNT_ONLY = { method: "search", query: "x", source: "account" }
 const POST_CONVERSATION_ACCOUNT_ONLY = { method: "conversation", post: "20", source: "account" }
+const POST_TIMELINE_ACCOUNT_ONLY = { method: "timeline", handle: "x", source: "account" }
 const stateDir = mkdtempSync(join(tmpdir(), "mcp-smoke-"))
 
 function expectReadTool(tools, name) {
@@ -63,9 +64,11 @@ async function listTools() {
     expectErrorResult(search, "not_found", `${POST_READ} search with no reading account`)
     const conversation = await client.callTool({ name: POST_READ, arguments: POST_CONVERSATION_ACCOUNT_ONLY })
     expectErrorResult(conversation, "not_found", `${POST_READ} conversation with no reading account`)
+    const timeline = await client.callTool({ name: POST_READ, arguments: POST_TIMELINE_ACCOUNT_ONLY })
+    expectErrorResult(timeline, "not_found", `${POST_READ} timeline with no reading account`)
     expectEmptyStateDir("Post reads without a reading account must not create state.")
     console.log(
-      `${POST_READ} view, search and conversation with source account give a not_found error result and no reading account.`,
+      `${POST_READ} view, search, conversation and timeline with source account give a not_found error result and no reading account.`,
     )
 
     const result = await client.callTool({ name: UNKNOWN_TOOL })

@@ -17,6 +17,7 @@ const POST_READ = "x_post_read"
 const POST_VIEW_ACCOUNT_ONLY = JSON.stringify({ method: "view", posts: ["20"], source: "account" })
 const POST_SEARCH_ACCOUNT_ONLY = JSON.stringify({ method: "search", query: "x", source: "account" })
 const POST_CONVERSATION_ACCOUNT_ONLY = JSON.stringify({ method: "conversation", post: "20", source: "account" })
+const POST_TIMELINE_ACCOUNT_ONLY = JSON.stringify({ method: "timeline", handle: "x", source: "account" })
 const stateDir = mkdtempSync(join(tmpdir(), "cli-smoke-"))
 
 function expect(condition, message) {
@@ -103,9 +104,10 @@ function viewsNoPostWithoutAReadingAccount() {
     "not_found",
     `${POST_READ} conversation with no reading account`,
   )
+  expectCliRunError(POST_READ, POST_TIMELINE_ACCOUNT_ONLY, "not_found", `${POST_READ} timeline with no reading account`)
   expect(readdirSync(stateDir).length === 0, "Post reads without a reading account must not create state")
   console.log(
-    `${POST_READ} view, search and conversation with source account exit ${EXIT_FAILED} with not_found and no reading account.`,
+    `${POST_READ} view, search, conversation and timeline with source account exit ${EXIT_FAILED} with not_found and no reading account.`,
   )
 }
 
