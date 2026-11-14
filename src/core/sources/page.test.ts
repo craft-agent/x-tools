@@ -110,6 +110,34 @@ describe("readPage: the first page", () => {
   })
 })
 
+describe("readPage: a page that carries more than items", () => {
+  type Head = { title: string; ancestors: string[] }
+
+  test("passes the fields beside items and cursor through, from either source, with the cursor encoded", async () => {
+    const paged: PagedRead<string, Head> = {
+      fxtwitter: async () => ({
+        kind: "answer",
+        value: { title: "from FxTwitter", ancestors: ["root"], items: ["a"], cursor: "fx2" },
+      }),
+      account: async () => ({ title: "from the account", ancestors: [], items: ["b"], cursor: null }),
+    }
+    expect(await readPage(h.reader(), request(), paged)).toEqual({
+      source: "fxtwitter",
+      title: "from FxTwitter",
+      ancestors: ["root"],
+      items: ["a"],
+      cursor: cursorOf("fxtwitter", "fx2"),
+    })
+    expect(await readPage(h.reader(), request({ source: "account" }), paged)).toEqual({
+      source: "account",
+      title: "from the account",
+      ancestors: [],
+      items: ["b"],
+      cursor: null,
+    })
+  })
+})
+
 describe("readPage: a cursor continues on the source that gave it", () => {
   test("the next page goes to FxTwitter with its own cursor, and the last page has no cursor", async () => {
     h.fake.route(pathOf("fx2"), fxPage(["c"], null))
@@ -143,7 +171,7 @@ describe("readPage: a cursor continues on the source that gave it", () => {
   })
 
   test("an own cursor that is empty counts as the end", async () => {
-    const answer = await readPage(h.reader(), request(), {
+    const answer = await readPage<string>(h.reader(), request(), {
       account: async () => ({ items: ["only"], cursor: "" }),
     })
     expect(answer).toEqual({ source: "account", items: ["only"], cursor: null })
