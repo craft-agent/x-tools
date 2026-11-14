@@ -11,7 +11,7 @@ INVALID_REQUESTS = {
     "a string": "check",
     "no op": {"cookies": COOKIES, "deadline": 5},
     "a number as op": make_request(op=1),
-    "an unknown op": make_request(op="post"),
+    "an unknown op": make_request(op="unregistered"),
     "args as a list": make_request(args=[]),
     "args as null": make_request(args=None),
     "no deadline": {"op": "check", "cookies": COOKIES, "refused": None, "args": {}},

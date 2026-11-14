@@ -13,12 +13,17 @@ export type RuntimeOptions = {
   now?: () => number
 }
 
-/** The runtime of a tool call: the profile's variable prefix, the package's command line, the environment and the clock. It reads nothing. */
+/** The version a source that runs unbundled reports. */
+const UNBUNDLED_VERSION = "0.0.0"
+
+/** The runtime of a tool call: the profile's variable prefix, the package's command line, its User-Agent, the environment and the clock. It reads nothing. */
 export function createToolRuntime(options: RuntimeOptions = {}): ToolRuntime {
   const profile = options.profile ?? PROJECT_PROFILE
+  const version = typeof __VERSION__ === "string" ? __VERSION__ : UNBUNDLED_VERSION
   return {
     envPrefix: profile.envPrefix,
     cli: PROJECT.cli,
+    userAgent: `${PROJECT.name}/${version} (+${PROJECT.homepage})`,
     env: options.env ?? process.env,
     now: options.now ?? Date.now,
   }

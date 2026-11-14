@@ -734,6 +734,15 @@ and every entry point checks them the same way.
   call and a cooldown after a 429, kept in state of their own beside the
   labels and counted apart from them. It is a free service with no promise
   of uptime, and a polite client keeps it answering.
+- **Its gap, daily cap and cooldown are settings with bounds**:
+  `fxtwitter_gap_ms` (500 by default, 100 to 60000),
+  `fxtwitter_reads_per_day` (1000, 1 to 5000) and
+  `fxtwitter_cooldown_seconds` (900, 60 to 21600), whole numbers. A 429's
+  `Retry-After`, when it gives one, sets the cooldown instead, within 1 s and
+  6 hours. The rest is fixed: 15 s per request, a reply cut off past 2 MB,
+  and three failures in a row ending FxTwitter's part of a call. The settings
+  let a user be gentler with a service they share; the fixed limits only keep
+  a hung or runaway reply from holding a call.
 
 ## What the tools never read
 

@@ -9,6 +9,7 @@ const shared = {
   format: "esm",
   target: "node24",
   logLevel: "info",
+  define: { __VERSION__: JSON.stringify(version) },
 }
 
 await build({
@@ -16,7 +17,6 @@ await build({
   entryPoints: ["src/mcp/main.ts"],
   outfile: "dist/mcp.js",
   banner: { js: "#!/usr/bin/env node" },
-  define: { __VERSION__: JSON.stringify(version) },
 })
 
 await build({

@@ -1,12 +1,12 @@
-import { isAbsolute } from "node:path"
 import { ToolError } from "../errors"
 import { abortError } from "../exec"
 import { cookieVariable } from "../x/cookies"
 import { PYTHON_VERSION, TWSCRAPE_VERSION, readEngineState, type EngineState } from "../x/engine"
 import { labelPaths, listLabels, pickLabel, type LabelPaths } from "../x/labels"
 import { paceSettings, readPacingState, readsUsed, type PaceSettings } from "../x/pacing"
-import type { ToolRuntime } from "../runtime"
+import { requireRuntime, type ToolRuntime } from "../runtime"
 import { defineTool } from "../tool"
+import { readFxtwitterRow } from "./fxtwitter"
 import { assessHealth, engineInstallCommand } from "./health"
 import { accountReadInput, accountReadOutput, type AccountRow, type EngineRow } from "./schemas"
 import { currentRefusal, isoOrNull, rateLimitEnd, readCookieReport, refusedError } from "./state"
@@ -24,6 +24,13 @@ function checkAbort(signal?: AbortSignal): void {
   if (signal?.aborted) throw abortError(signal)
 }
 
+/** The runtime's clock; `internal_error` when it gives no finite time. */
+function currentTime(runtime: ToolRuntime): number {
+  const now = runtime.now()
+  if (!Number.isFinite(now)) throw new ToolError("internal_error", "The runtime clock is invalid.")
+  return now
+}
+
 function engineRow(engine: EngineState, cli: string, stateDir: string): EngineRow {
   return {
     status: engine.status,
@@ -38,8 +45,7 @@ function engineRow(engine: EngineState, cli: string, stateDir: string): EngineRo
 async function readLabel(paths: LabelPaths, scope: ReadScope): Promise<AccountRow> {
   const { runtime, settings, stateDir } = scope
   checkAbort(scope.signal)
-  const now = runtime.now()
-  if (!Number.isFinite(now)) throw new ToolError("internal_error", "The runtime clock is invalid.")
+  const now = currentTime(runtime)
   const cookies = await readCookieReport({
     paths,
     variable: cookieVariable(runtime.envPrefix, paths.label),
@@ -82,6 +88,7 @@ export const xAccountRead = defineTool({
   title: "Read X reading accounts",
   description:
     "Report the engine's state and each reading account's local state, from files alone: it never contacts X or FxTwitter, starts no program and costs no read. " +
+    "`fxtwitter` says whether FxTwitter is on (off under the `account_only` setting), its requests used in the last day against its daily cap and a running cooldown. " +
     "Per account: where its cookies come from and whether they are usable (never the cookies), whether X refused the current session and what it said, a running X rate limit, the reads used against the hourly and daily caps, and one next step (`action`, `hint`, `recovery_command`). " +
     "`ready` means the local checks passed, not that X accepts the session right now. " +
     "Left out, `account` reports every account, sorted by label, and an empty list when none is set up; an unknown label fails `not_found`. " +
@@ -93,10 +100,7 @@ export const xAccountRead = defineTool({
   output: accountReadOutput,
   async execute(args, ctx) {
     checkAbort(ctx.signal)
-    const { runtime, stateDir } = ctx
-    if (!runtime || !stateDir || !isAbsolute(stateDir)) {
-      throw new ToolError("internal_error", "Account reads require a runtime and an absolute state directory.")
-    }
+    const { runtime, stateDir } = requireRuntime(ctx, "Account reads")
     const labels =
       args.account === undefined
         ? (await listLabels(stateDir)).map((label) => labelPaths(stateDir, label))
@@ -105,6 +109,8 @@ export const xAccountRead = defineTool({
     const scope: ReadScope = { stateDir, runtime, settings: paceSettings(ctx.options), engine, signal: ctx.signal }
     const accounts: AccountRow[] = []
     for (const paths of labels) accounts.push(await readLabel(paths, scope))
-    return { engine: engineRow(engine, runtime.cli, stateDir), accounts }
+    const fxtwitter = await readFxtwitterRow(stateDir, ctx.options, currentTime(runtime))
+    checkAbort(ctx.signal)
+    return { engine: engineRow(engine, runtime.cli, stateDir), fxtwitter, accounts }
   },
 })

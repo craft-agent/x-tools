@@ -10,7 +10,7 @@ import {
   type PacingState,
   type Refusal,
 } from "./pacing"
-import { waitForReadLock } from "./read-lock"
+import { DEFAULT_LOCK_WAIT_MS, waitForReadLock } from "./read-lock"
 import { abortableSleep } from "./sleep"
 
 /** What `pacedCall` needs. */
@@ -29,9 +29,6 @@ export type PacedCallOptions = {
   /** How long to wait for another read of the label to finish; defaults to 90 s. */
   lockWaitMs?: number
 }
-
-/** How long a read waits for the label's lock: a little over one read's time limit. */
-const DEFAULT_LOCK_WAIT_MS = 90_000
 
 /** Whether `error` says no request could have reached X: a program that cannot run, or a failure that names `contacted: false`. */
 function neverContacted(error: unknown): boolean {

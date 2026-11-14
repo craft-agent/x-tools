@@ -1,6 +1,6 @@
 import { chmodSync, closeSync, lstatSync, openSync, type BigIntStats } from "node:fs"
 import { DatabaseSync } from "node:sqlite"
-import { ToolError } from "../errors"
+import { ToolError, type ErrorDetails } from "../errors"
 import { abortableSleep } from "./sleep"
 
 /** Why a read could not start: another read of the same reading account holds its lock. */
@@ -12,6 +12,9 @@ const FILE_MODE = 0o600
 /** SQLite's primary result code for a lock held elsewhere; extended codes keep it in the low byte. */
 const SQLITE_BUSY = 5
 const PRIMARY_CODE_MASK = 0xff
+
+/** How long a read waits for a held lock, unless told otherwise: a little over one read's time limit. */
+export const DEFAULT_LOCK_WAIT_MS = 90_000
 
 /** How often a waiting read tries the lock again, unless told otherwise. */
 const DEFAULT_POLL_MS = 250
@@ -114,6 +117,10 @@ export type WaitOptions = {
   /** How often to try again; defaults to 250 ms. */
   pollMs?: number
   signal?: AbortSignal
+  /** The message of the error thrown past `waitMs`; defaults to `READ_LOCK_HELD`. */
+  heldMessage?: string
+  /** Fields added to that error's `details`, beside `reason: "read_lock"`. */
+  heldDetails?: ErrorDetails
   /** Injected for tests; default Date.now. */
   now?: () => number
   /** Injected for tests; default a timer-based sleep that rejects with an AbortError when `signal` aborts. */
@@ -122,12 +129,21 @@ export type WaitOptions = {
 
 /**
  * Takes the read lock at `path`, trying again every `pollMs` while another
- * process holds it. Past `waitMs` it throws `rate_limited` with
- * `details.reason: "read_lock"`; an abort while waiting rejects with the
- * AbortError. The returned function releases the lock, as `tryReadLock`'s does.
+ * process holds it. Past `waitMs` it throws `rate_limited` worded
+ * `heldMessage`, with `details.reason: "read_lock"` and `heldDetails`; an abort
+ * while waiting rejects with the AbortError. The returned function releases
+ * the lock, as `tryReadLock`'s does.
  */
 export async function waitForReadLock(path: string, options: WaitOptions): Promise<() => void> {
-  const { waitMs, pollMs = DEFAULT_POLL_MS, signal, now = Date.now, sleep = abortableSleep } = options
+  const {
+    waitMs,
+    pollMs = DEFAULT_POLL_MS,
+    signal,
+    heldMessage = READ_LOCK_HELD,
+    heldDetails,
+    now = Date.now,
+    sleep = abortableSleep,
+  } = options
   const deadline = now() + waitMs
   for (;;) {
     signal?.throwIfAborted()
@@ -135,8 +151,8 @@ export async function waitForReadLock(path: string, options: WaitOptions): Promi
     if (release) return release
     const remaining = deadline - now()
     if (remaining <= 0) {
-      throw new ToolError("rate_limited", READ_LOCK_HELD, {
-        details: { reason: "read_lock" },
+      throw new ToolError("rate_limited", heldMessage, {
+        details: { ...heldDetails, reason: "read_lock" },
       })
     }
     await sleep(Math.min(pollMs, remaining), signal)

@@ -21,6 +21,7 @@ import importlib
 import importlib.metadata
 import json
 import math
+import re
 import sqlite3
 import sys
 import uuid
@@ -42,12 +43,19 @@ WAIT_INTERVAL_SECONDS = 2
 # The twscrape exceptions that mean X answered with an error (`ApiError` is an `AbortReqError`).
 X_ERRORS = ("AbortReqError", "ApiError", "XClIdParseError")
 PARSE_ERRORS = ("ParseError",)
+# A post id: decimal digits only (not `\d`, which takes other scripts' digits), as X's ids are.
+POST_ID = re.compile(r"[0-9]{1,20}")
+VIDEO_MP4 = "video/mp4"
+MILLISECONDS = 1000
 
 Operation = Callable[[Any, dict], Awaitable[Any]]
+ArgumentCheck = Callable[[dict], None]
 
 # The operations that contact X: each gets an `API` whose pool holds the one session, and
 # returns the JSON that becomes `data`.
 OPERATIONS: dict[str, Operation] = {}
+# The checks of an operation's arguments, which run before anything is contacted.
+ARGUMENT_CHECKS: dict[str, ArgumentCheck] = {}
 
 _warnings: list[str] = []
 _secrets: list[str] = []
@@ -62,11 +70,19 @@ class Failure(Exception):
         self.error = error
 
 
-def operation(name: str) -> Callable[[Operation], Operation]:
-    """Registers a coroutine function as the X operation `name`."""
+def operation(name: str, check_args: ArgumentCheck | None = None) -> Callable[[Operation], Operation]:
+    """Registers a coroutine function as the X operation `name`.
+
+    `check_args`, when given, runs on the request's `args` before anything is contacted and raises
+    `Failure("invalid_request")` for arguments the operation cannot take.
+    """
 
     def register(function: Operation) -> Operation:
         OPERATIONS[name] = function
+        if check_args is None:
+            ARGUMENT_CHECKS.pop(name, None)
+        else:
+            ARGUMENT_CHECKS[name] = check_args
         return function
 
     return register
@@ -207,6 +223,83 @@ def check() -> dict:
         raise Failure("error", "twscrape is not installed in the engine") from None
 
 
+def check_post_args(args: dict) -> None:
+    """Raises `Failure("invalid_request")` unless `args.id` is a decimal string of 1 to 20 digits."""
+    post_id = args.get("id")
+    if not isinstance(post_id, str) or POST_ID.fullmatch(post_id) is None:
+        raise Failure("invalid_request", "args.id is not a post id of 1 to 20 digits")
+
+
+def iso_utc(moment: datetime) -> str:
+    """`moment` as an ISO 8601 string in UTC; a moment without a zone is taken as UTC."""
+    moment = moment if moment.tzinfo else moment.replace(tzinfo=timezone.utc)
+    return moment.astimezone(timezone.utc).isoformat()
+
+
+def video_url(video: Any) -> str | None:
+    """The file of a video: its best mp4, else its best variant; None when it has no variant."""
+    variants = [variant for variant in video.variants if variant.contentType == VIDEO_MP4] or video.variants
+    best = max(variants, key=lambda variant: variant.bitrate, default=None)
+    return best.url if best else None
+
+
+def media_of(media: Any) -> list[dict]:
+    """The photos, videos and animated gifs of a tweet's `Media` (in that order, as twscrape sorts them).
+
+    twscrape carries neither a size nor an alt text, and gives a video's duration in milliseconds. A video with no
+    file to point at is left out rather than given its thumbnail, which is an image.
+    """
+    return [
+        *({"type": "photo", "url": photo.url, "duration_seconds": None} for photo in media.photos),
+        *(
+            {"type": "video", "url": url, "duration_seconds": video.duration / MILLISECONDS}
+            for video in media.videos
+            if (url := video_url(video)) is not None
+        ),
+        *({"type": "gif", "url": gif.videoUrl, "duration_seconds": None} for gif in media.animated),
+    ]
+
+
+def post_of(tweet: Any, with_quote: bool = True) -> dict:
+    """The compact dict of a twscrape `Tweet` that the package's post shape is built from.
+
+    The quoted tweet is one level only: a quote has neither `reply_to` nor `quote` of its own.
+    """
+    post = {
+        "id": tweet.id_str,
+        "url": tweet.url,
+        "date": iso_utc(tweet.date),
+        "user": {"id": tweet.user.id_str, "username": tweet.user.username, "displayname": tweet.user.displayname},
+        "text": tweet.rawContent,
+        "lang": tweet.lang,
+        "replies": tweet.replyCount,
+        "reposts": tweet.retweetCount,
+        "likes": tweet.likeCount,
+        "quotes": tweet.quoteCount,
+        "bookmarks": tweet.bookmarkedCount,
+        "views": tweet.viewCount,
+        "media": media_of(tweet.media),
+        "links": [link.url for link in tweet.links],
+        "sensitive": tweet.possibly_sensitive,
+    }
+    if with_quote:
+        replied_to = tweet.inReplyToUser
+        post["reply_to"] = (
+            {"id": tweet.inReplyToTweetIdStr, "username": replied_to.username if replied_to else None}
+            if tweet.inReplyToTweetIdStr
+            else None
+        )
+        post["quote"] = post_of(tweet.quotedTweet, with_quote=False) if tweet.quotedTweet else None
+    return post
+
+
+@operation("post", check_args=check_post_args)
+async def read_post(api: Any, args: dict) -> dict | None:
+    """One post by id: its compact dict, or None when X gives no tweet (missing, deleted or not visible)."""
+    tweet = await api.tweet_details(int(args["id"]))
+    return post_of(tweet) if tweet is not None else None
+
+
 def failure_kind(exc: Exception, twscrape: Any) -> str:
     """The reply kind of an exception an operation raised."""
     if isinstance(exc, twscrape.NoAccountError):
@@ -263,6 +356,8 @@ def validate(request: object) -> tuple[str, dict, float, str | None]:
     args = request.get("args", {})
     if not isinstance(args, dict):
         raise Failure("invalid_request", "args is not an object")
+    if (check_args := ARGUMENT_CHECKS.get(op)) is not None:
+        check_args(args)
     deadline = request.get("deadline")
     if not isinstance(deadline, (int, float)) or isinstance(deadline, bool) or not 0 < deadline < math.inf:
         raise Failure("invalid_request", "deadline is not a positive number")

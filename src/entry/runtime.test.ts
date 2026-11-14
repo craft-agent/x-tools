@@ -26,6 +26,7 @@ test("the defaults are the package's identity, the process environment and the c
   const runtime = createToolRuntime()
   expect(runtime.envPrefix).toBe(PROJECT_PROFILE.envPrefix)
   expect(runtime.cli).toBe(PROJECT.cli)
+  expect(runtime.userAgent).toBe(`${PROJECT.name}/0.0.0 (+${PROJECT.homepage})`)
   expect(runtime.env === process.env).toBe(true)
   expect(runtime.now).toBe(Date.now)
 })

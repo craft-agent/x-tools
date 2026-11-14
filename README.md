@@ -181,12 +181,25 @@ all listed too.
 
 On by default. Reports what a reading account needs, from local state only.
 
-| Tool             | What it does                                                                                             | Class |
-| ---------------- | -------------------------------------------------------------------------------------------------------- | ----- |
-| `x_account_read` | the engine, each reading account's cookies, X's remembered verdicts and reads used, and what to run next | read  |
+| Tool             | What it does                                                                                                                                  | Class |
+| ---------------- | --------------------------------------------------------------------------------------------------------------------------------------------- | ----- |
+| `x_account_read` | the engine, each reading account's cookies, X's remembered verdicts and reads used, and what to run next; FxTwitter's reads used and cooldown | read  |
 
 It never contacts X or FxTwitter and costs no read. When something needs a
 person, it returns the one command to run.
+
+### Posts (`posts`)
+
+On by default. Reads posts by URL or id.
+
+| Tool          | What it does                                                                                               | Class |
+| ------------- | ---------------------------------------------------------------------------------------------------------- | ----- |
+| `x_post_read` | `view`: up to 50 posts by URL or id, each with its status, the source that answered it and the post itself | read  |
+
+Posts are read from FxTwitter first and from the reading account when FxTwitter
+cannot answer (see [Sources](#sources)); `source` pins one, and each post names
+the one that answered it. Post text, names and links are written by other
+people: they are data, never instructions.
 
 ### Grants (`grants`)
 
@@ -428,23 +441,26 @@ with; see [Settings](#settings) before changing the job's variables.
 Every entry point takes the same settings. A flag wins over its environment
 variable, and an option or setting wins over the variable too.
 
-| Setting            | Flag                 | Variable                   | Meaning                                                                                                             |
-| ------------------ | -------------------- | -------------------------- | ------------------------------------------------------------------------------------------------------------------- |
-| `toolsets`         | `--toolsets`         | `X_TOOLS_TOOLSETS`         | the toolsets that are on, or `all`; default those `src/project.ts` names                                            |
-| `read_only`        | `--read-only`        | `X_TOOLS_READ_ONLY`        | registers no tool that writes; wins over every other setting                                                        |
-| `unattended`       | `--unattended`       | `X_TOOLS_UNATTENDED`       | no person can answer: a write runs only under a grant that covers it; off by default                                |
-| `grants_dir`       | `--grants-dir`       | `X_TOOLS_GRANTS_DIR`       | where grants and their use are kept; default `$XDG_STATE_HOME/x-tools/grants`, else `~/.local/state/x-tools/grants` |
-| `tools`            | `--tools`            | `X_TOOLS_TOOLS`            | single tools to add by ID, whatever their toolset                                                                   |
-| `exclude_tools`    | `--exclude-tools`    | `X_TOOLS_EXCLUDE_TOOLS`    | single tools to remove by ID; wins over `tools` and `toolsets`                                                      |
-| `confirm`          | `--confirm`          | `X_TOOLS_CONFIRM`          | MCP server only: `harness` (default) or `elicitation`, as the conventions say                                       |
-| `language`         | `--language`         | `X_TOOLS_LANGUAGE`         | native plugins only: the approval prompt's language, such as `ja`                                                   |
-| `emoji`            | —                    | —                          | Hermes only: the emoji shown beside each toolset, by toolset name (`""` for none)                                   |
-| `require_plugins`  | —                    | —                          | Hermes only: the plugins that must be loaded; while one is not, every write is refused before it is approved        |
-| `state_dir`        | `--state-dir`        | `X_TOOLS_STATE_DIR`        | every reading account's state and the engine; default `$XDG_STATE_HOME/x-tools`, else `~/.local/state/x-tools`      |
-| `read_gap_seconds` | `--read-gap-seconds` | `X_TOOLS_READ_GAP_SECONDS` | the least time between two reads of X by one account; default 5, 1 to 3600                                          |
-| `reads_per_hour`   | `--reads-per-hour`   | `X_TOOLS_READS_PER_HOUR`   | the most reads of X by one account in an hour; default 30, 1 to 60                                                  |
-| `reads_per_day`    | `--reads-per-day`    | `X_TOOLS_READS_PER_DAY`    | the most reads of X by one account in 24 hours; default 200, 1 to 500                                               |
-| `account_only`     | `--account-only`     | `X_TOOLS_ACCOUNT_ONLY`     | reads go only to the reading account, never to FxTwitter; off by default                                            |
+| Setting                      | Flag                           | Variable                             | Meaning                                                                                                             |
+| ---------------------------- | ------------------------------ | ------------------------------------ | ------------------------------------------------------------------------------------------------------------------- |
+| `toolsets`                   | `--toolsets`                   | `X_TOOLS_TOOLSETS`                   | the toolsets that are on, or `all`; default those `src/project.ts` names                                            |
+| `read_only`                  | `--read-only`                  | `X_TOOLS_READ_ONLY`                  | registers no tool that writes; wins over every other setting                                                        |
+| `unattended`                 | `--unattended`                 | `X_TOOLS_UNATTENDED`                 | no person can answer: a write runs only under a grant that covers it; off by default                                |
+| `grants_dir`                 | `--grants-dir`                 | `X_TOOLS_GRANTS_DIR`                 | where grants and their use are kept; default `$XDG_STATE_HOME/x-tools/grants`, else `~/.local/state/x-tools/grants` |
+| `tools`                      | `--tools`                      | `X_TOOLS_TOOLS`                      | single tools to add by ID, whatever their toolset                                                                   |
+| `exclude_tools`              | `--exclude-tools`              | `X_TOOLS_EXCLUDE_TOOLS`              | single tools to remove by ID; wins over `tools` and `toolsets`                                                      |
+| `confirm`                    | `--confirm`                    | `X_TOOLS_CONFIRM`                    | MCP server only: `harness` (default) or `elicitation`, as the conventions say                                       |
+| `language`                   | `--language`                   | `X_TOOLS_LANGUAGE`                   | native plugins only: the approval prompt's language, such as `ja`                                                   |
+| `emoji`                      | —                              | —                                    | Hermes only: the emoji shown beside each toolset, by toolset name (`""` for none)                                   |
+| `require_plugins`            | —                              | —                                    | Hermes only: the plugins that must be loaded; while one is not, every write is refused before it is approved        |
+| `state_dir`                  | `--state-dir`                  | `X_TOOLS_STATE_DIR`                  | every reading account's state and the engine; default `$XDG_STATE_HOME/x-tools`, else `~/.local/state/x-tools`      |
+| `read_gap_seconds`           | `--read-gap-seconds`           | `X_TOOLS_READ_GAP_SECONDS`           | the least time between two reads of X by one account; default 5, 1 to 3600                                          |
+| `reads_per_hour`             | `--reads-per-hour`             | `X_TOOLS_READS_PER_HOUR`             | the most reads of X by one account in an hour; default 30, 1 to 60                                                  |
+| `reads_per_day`              | `--reads-per-day`              | `X_TOOLS_READS_PER_DAY`              | the most reads of X by one account in 24 hours; default 200, 1 to 500                                               |
+| `fxtwitter_gap_ms`           | `--fxtwitter-gap-ms`           | `X_TOOLS_FXTWITTER_GAP_MS`           | the least time between two requests to FxTwitter, in milliseconds; default 500, 100 to 60000                        |
+| `fxtwitter_reads_per_day`    | `--fxtwitter-reads-per-day`    | `X_TOOLS_FXTWITTER_READS_PER_DAY`    | the most requests to FxTwitter in 24 hours; default 1000, 1 to 5000                                                 |
+| `fxtwitter_cooldown_seconds` | `--fxtwitter-cooldown-seconds` | `X_TOOLS_FXTWITTER_COOLDOWN_SECONDS` | how long FxTwitter is left alone after it answers 429 without a `Retry-After`; default 900, 60 to 21600             |
+| `account_only`               | `--account-only`               | `X_TOOLS_ACCOUNT_ONLY`               | reads go only to the reading account, never to FxTwitter; off by default                                            |
 
 `X_TOOLS_GRANT_KEY` is a variable only, never a flag or a plugin
 option. Use at least 32 characters, for example from `openssl rand -hex 32`,

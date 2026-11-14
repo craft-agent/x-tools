@@ -13,6 +13,8 @@ afterEach(removeTempDirs)
 const INSTALL = (stateDir: string) =>
   `'/opt/x'\\''s cli' engine install --state-dir '${stateDir.replaceAll("'", "'\\''")}'`
 
+const IDLE_FXTWITTER = { enabled: true, reads_last_day: 0, reads_per_day: 1000, cooldown_until: null }
+
 describe("x_account_read", () => {
   test("is a read tool of the account toolset that stays on in read-only mode", () => {
     expect(xAccountRead.toolset).toBe("account")
@@ -32,6 +34,7 @@ describe("x_account_read", () => {
         pinned_twscrape: TWSCRAPE_VERSION,
         recovery_command: INSTALL(h.stateDir),
       },
+      fxtwitter: IDLE_FXTWITTER,
       accounts: [],
     })
     await expect(stat(h.stateDir)).rejects.toMatchObject({ code: "ENOENT" })
@@ -48,6 +51,7 @@ describe("x_account_read", () => {
         pinned_twscrape: TWSCRAPE_VERSION,
         recovery_command: null,
       },
+      fxtwitter: IDLE_FXTWITTER,
       accounts: [
         {
           label: "default",
