@@ -7,6 +7,8 @@ export const PROJECT = {
   name: "x-tools",
   /** The command line the Hermes plugin calls. */
   cli: "x-tools-cli",
+  /** Where the package lives; FxTwitter's User-Agent names it. */
+  homepage: "https://github.com/craft-agent/x-tools",
   /** Every tool ID starts with `<toolPrefix>_`. */
   toolPrefix: "x",
   /** Every setting's environment variable is `<envPrefix>_<SETTING>`. */

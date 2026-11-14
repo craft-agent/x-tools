@@ -22,6 +22,9 @@ const CLI = "/opt/x's cli"
 /** The package's own variable prefix. */
 const ENV_PREFIX = "X_TOOLS"
 
+/** What the runtime sends as `User-Agent`. */
+const USER_AGENT = "test-client/0.0.0"
+
 /** What a label's files hold: the cookie file's text (none leaves it out) and what pacing remembers. */
 type LabelFiles = { cookies?: string; mode?: number; pacing?: Partial<PacingState> }
 
@@ -29,7 +32,7 @@ type LabelFiles = { cookies?: string; mode?: number; pacing?: Partial<PacingStat
 export async function fixture(options?: ToolOptions) {
   const stateDir = join(await tempDir(), "state's directory")
   const env: Record<string, string | undefined> = { PATH: "" }
-  const runtime: ToolRuntime = { envPrefix: ENV_PREFIX, cli: CLI, env, now: () => NOW }
+  const runtime: ToolRuntime = { envPrefix: ENV_PREFIX, cli: CLI, userAgent: USER_AGENT, env, now: () => NOW }
   const ctx: ToolContext = { cwd: stateDir, stateDir, options, runtime }
   return {
     stateDir,

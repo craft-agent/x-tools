@@ -6,6 +6,8 @@ export type ToolRuntime = {
   cli: string
   /** The environment a tool reads its variables from. */
   env: Readonly<Record<string, string | undefined>>
+  /** What a request to a third party sends as `User-Agent`: the package's name, version and where it lives. */
+  userAgent: string
   /** The clock in epoch milliseconds. */
   now: () => number
 }
