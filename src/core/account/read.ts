@@ -1,11 +1,10 @@
-import { isAbsolute } from "node:path"
 import { ToolError } from "../errors"
 import { abortError } from "../exec"
 import { cookieVariable } from "../x/cookies"
 import { PYTHON_VERSION, TWSCRAPE_VERSION, readEngineState, type EngineState } from "../x/engine"
 import { labelPaths, listLabels, pickLabel, type LabelPaths } from "../x/labels"
 import { paceSettings, readPacingState, readsUsed, type PaceSettings } from "../x/pacing"
-import type { ToolRuntime } from "../runtime"
+import { requireRuntime, type ToolRuntime } from "../runtime"
 import { defineTool } from "../tool"
 import { readFxtwitterRow } from "./fxtwitter"
 import { assessHealth, engineInstallCommand } from "./health"
@@ -101,10 +100,7 @@ export const xAccountRead = defineTool({
   output: accountReadOutput,
   async execute(args, ctx) {
     checkAbort(ctx.signal)
-    const { runtime, stateDir } = ctx
-    if (!runtime || !stateDir || !isAbsolute(stateDir)) {
-      throw new ToolError("internal_error", "Account reads require a runtime and an absolute state directory.")
-    }
+    const { runtime, stateDir } = requireRuntime(ctx, "Account reads")
     const labels =
       args.account === undefined
         ? (await listLabels(stateDir)).map((label) => labelPaths(stateDir, label))

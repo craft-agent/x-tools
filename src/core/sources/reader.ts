@@ -3,6 +3,7 @@ import { ToolError } from "../errors"
 import { createFxClient, type FxClient } from "../fxtwitter/client"
 import { fxPaceSettings } from "../fxtwitter/pacing"
 import type { Connect } from "../fxtwitter/transport"
+import { requireRuntime } from "../runtime"
 import type { ToolContext } from "../tool"
 import { listLabels } from "../x/labels"
 import { DEFAULT_LOCK_WAIT_MS } from "../x/read-lock"
@@ -63,10 +64,7 @@ function budgetError(): ToolError {
  * otherwise); the install directory is needed only for a read of the account.
  */
 export function createReader(ctx: ToolContext, overrides: ReaderOverrides = {}): Reader {
-  const { runtime, stateDir } = ctx
-  if (!runtime || !stateDir || !isAbsolute(stateDir)) {
-    throw new ToolError("internal_error", "Reads require a runtime and an absolute state directory.")
-  }
+  const { runtime, stateDir } = requireRuntime(ctx, "Reads")
   const now = overrides.now ?? runtime.now
   const deadline = now() + (overrides.budgetMs ?? CALL_BUDGET_MS)
   const onlyAccount = accountOnly(ctx.options)
