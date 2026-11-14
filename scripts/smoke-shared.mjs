@@ -25,6 +25,8 @@ export const ACCOUNT_ONLY_READS = [
     [
       { method: "view", handle: "x", source: "account" },
       { method: "search", query: "x", source: "account" },
+      { method: "followers", handle: "x", source: "account" },
+      { method: "reposters", post: "20", source: "account" },
     ],
   ],
 ]
