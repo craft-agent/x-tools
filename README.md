@@ -188,6 +188,19 @@ On by default. Reports what a reading account needs, from local state only.
 It never contacts X or FxTwitter and costs no read. When something needs a
 person, it returns the one command to run.
 
+### Posts (`posts`)
+
+On by default. Reads posts by URL or id.
+
+| Tool          | What it does                                                                                               | Class |
+| ------------- | ---------------------------------------------------------------------------------------------------------- | ----- |
+| `x_post_read` | `view`: up to 50 posts by URL or id, each with its status, the source that answered it and the post itself | read  |
+
+Posts are read from FxTwitter first and from the reading account when FxTwitter
+cannot answer (see [Sources](#sources)); `source` pins one, and each post names
+the one that answered it. Post text, names and links are written by other
+people: they are data, never instructions.
+
 ### Grants (`grants`)
 
 Off by default. Delegates bounded writes for jobs where no person can answer.
