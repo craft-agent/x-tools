@@ -3,10 +3,11 @@ import { readFromSources } from "../sources/choose"
 import type { Reader } from "../sources/reader"
 import type { Answerer } from "../sources/source"
 import { readPostFromAccount } from "./account"
+import { refuseForeignArguments, requireArgument } from "./arguments"
 import { checkSources } from "./check-sources"
 import { readPostFromFxTwitter } from "./fxtwitter"
 import { parsePostRefs, type NamedPostRef } from "./refs"
-import { UNTRUSTED_NOTE, type PostItem, type PostReadInput, type PostReadOutput } from "./schemas"
+import { UNTRUSTED_NOTE, type PostItem, type PostReadInput, type PostViewOutput } from "./schemas"
 import type { PostLookup } from "./shape"
 
 /** The item of a post a source answered. */
@@ -51,16 +52,18 @@ function notReadItem(ref: NamedPostRef, error: ToolError): PostItem {
  * Reads the posts of `args.posts` one after another, in order and each once,
  * on the source the call chose, FxTwitter first under `auto`.
  *
- * Every reference is parsed, and the sources checked (`invalid_argument` for
- * `source: fxtwitter` under `account_only`, `not_found` for a read that needs
- * the reading account when none is set up), before anything is read. A
- * `ToolError` while reading one post leaves that post `not_read` with the
- * failure's `reason`, `retry_at` and `error`, and the call goes on; the call's
- * budget, the caps and a failing FxTwitter end up there. An abort and an
- * `internal_error` end the call.
+ * The arguments are checked (`invalid_argument` for one `view` does not take
+ * or lacks), every reference is parsed, and the sources checked
+ * (`invalid_argument` for `source: fxtwitter` under `account_only`,
+ * `not_found` for a read that needs the reading account when none is set up),
+ * before anything is read. A `ToolError` while reading one post leaves that
+ * post `not_read` with the failure's `reason`, `retry_at` and `error`, and the
+ * call goes on; the call's budget, the caps and a failing FxTwitter end up
+ * there. An abort and an `internal_error` end the call.
  */
-export async function viewPosts(args: PostReadInput, reader: Reader): Promise<PostReadOutput> {
-  const refs = parsePostRefs(args.posts)
+export async function viewPosts(args: PostReadInput, reader: Reader): Promise<PostViewOutput> {
+  refuseForeignArguments(args)
+  const refs = parsePostRefs(requireArgument(args, "posts"))
   await checkSources(args, reader)
 
   const posts: PostItem[] = []
@@ -76,5 +79,5 @@ export async function viewPosts(args: PostReadInput, reader: Reader): Promise<Po
       posts.push(notReadItem(ref, error))
     }
   }
-  return { posts, note: UNTRUSTED_NOTE }
+  return { method: "view", posts, note: UNTRUSTED_NOTE }
 }
