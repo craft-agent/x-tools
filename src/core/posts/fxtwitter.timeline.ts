@@ -1,14 +1,14 @@
 import { z } from "zod"
 import type { FxClient } from "../fxtwitter/client"
 import type { FxOutcome } from "../sources/choose"
-import { HTTP_NOT_FOUND, HTTP_OK, HTTP_UNAUTHORIZED, PROTECTED_OUTCOME } from "./fxtwitter"
+import { readFxRoute } from "./fxtwitter"
 import { pageOf, pagePath, type FxListAsk, type FxListRoute } from "./fxtwitter.list"
-import { POST_NOT_FOUND, unexpectedReplyError } from "./shape"
+import { POST_NOT_FOUND } from "./shape"
 import type { Tab } from "./schemas"
 import { goneTimeline, type TimelinePage } from "./timeline.shape"
 
 /** What a tab reads of FxTwitter's v2 API, below `/2/profile/<handle>`: the path, and the query-string fields that decide it. */
-const TAB_ROUTES: Readonly<Record<Tab, { path: string; params: Readonly<Record<string, string>> }>> = {
+const TAB_ROUTES: Readonly<Record<Tab, FxListRoute>> = {
   posts: { path: "statuses", params: {} },
   replies: { path: "statuses", params: { with_replies: "1" } },
   media: { path: "media", params: {} },
@@ -58,15 +58,9 @@ export async function readTimelineFromFxTwitter(
   tab: Tab,
   ask: FxListAsk,
 ): Promise<FxOutcome<TimelinePage>> {
-  const { status, body } = await client.get(pagePath(timelineRoute(handle, tab), ask))
-  switch (status) {
-    case HTTP_OK:
-      return { kind: "answer", value: { status: "ok", reason: null, ...pageOf(body, ask) } }
-    case HTTP_UNAUTHORIZED:
-      return { ...PROTECTED_OUTCOME, value: goneTimeline(PROTECTED_OUTCOME.value) }
-    case HTTP_NOT_FOUND:
-      return notFoundOutcome(body)
-    default:
-      throw unexpectedReplyError("fxtwitter", { status })
-  }
+  return readFxRoute(client, pagePath(timelineRoute(handle, tab), ask), {
+    found: (body) => ({ status: "ok", reason: null, ...pageOf(body, ask) }),
+    unauthorized: (outcome) => ({ ...outcome, value: goneTimeline(outcome.value) }),
+    notFound: notFoundOutcome,
+  })
 }
