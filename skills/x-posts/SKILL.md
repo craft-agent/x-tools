@@ -1,18 +1,18 @@
 ---
 name: x-posts
-description: 'Use when reading or checking X (Twitter) posts: what a post says by URL or id (author, time, counts of replies, reposts, likes, quotes and views, media, links, community note, whether it still exists), searching posts ("search X posts", X''s search syntax), who quoted a post ("who quoted this post"), who mentioned an account ("who mentioned @…"), the replies to a post and the posts it replies to ("read the conversation"), and an author''s own chain of posts ("read the thread"). Reads from FxTwitter first and the reading account when FxTwitter cannot answer; searches, quotes, mentions and replies come in pages. Not for an account''s own posts, profiles or followers (those come later), or for anything that writes to X.'
+description: 'Use when reading or checking X (Twitter) posts: what a post says by URL or id (author, time, counts of replies, reposts, likes, quotes and views, media, links, community note, whether it still exists), searching posts ("search X posts", X''s search syntax), who quoted a post ("who quoted this post"), who mentioned an account ("who mentioned @…"), the replies to a post and the posts it replies to ("read the conversation"), an author''s own chain of posts ("read the thread"), and an account''s posts by handle ("what has @… posted", its replies or media posts). Reads from FxTwitter first and the reading account when FxTwitter cannot answer; searches, quotes, mentions, replies and timelines come in pages. Not for profiles or followers (those come later), or for anything that writes to X.'
 metadata:
   toolset: posts
 ---
 
 # Reading posts
 
-| Tool          | Does                                                                                                  | Writes |
-| ------------- | ----------------------------------------------------------------------------------------------------- | ------ |
-| `x_post_read` | reads posts by URL or id, searches them, reads quotes, mentions, conversations and threads (`method`) | no     |
+| Tool          | Does                                                                                                                         | Writes |
+| ------------- | ---------------------------------------------------------------------------------------------------------------------------- | ------ |
+| `x_post_read` | reads posts by URL or id, searches them, reads quotes, mentions, conversations, threads and an account's timeline (`method`) | no     |
 
 One tool; `method` picks the read: `view`, `search`, `quotes`, `mentions`,
-`conversation` or `thread`.
+`conversation`, `thread` or `timeline`.
 Each method takes only its own arguments; one it does not take, or lacks, fails
 as `invalid_argument` and names it.
 
@@ -46,7 +46,8 @@ you would on x.com:
 `feed` picks the order: `latest` (the default, newest first), `top` (what X
 ranks first) or `media` (posts with media). The result repeats the `query` sent
 to the source. A search is words, not an account's timeline: use `from:` to
-find an account's posts, and expect the gaps X's search has.
+find an account's posts by words (to read them as they were posted, use
+`timeline` below), and expect the gaps X's search has.
 
 ## Quotes
 
@@ -90,18 +91,41 @@ Which to use: `thread` for what one person wrote as a series ("read this
 thread"); `conversation` for the replies other people made, or to see what a
 post answers.
 
+## Timeline
+
+`{"method":"timeline","handle":"ada_writes"}` reads a page of an account's
+posts, newest first. `handle` takes the account with or without `@`, 1 to 15
+letters, digits or underscores. `tab` picks what is read: `posts` (the default,
+the account's own posts), `replies` (its posts and its replies) or `media` (its
+posts with media). Follow `cursor` for older posts, with the same `handle` and
+`tab`, until it is `null`.
+
+- X serves only the newest 3,200 or so posts of an account, so the paging ends
+  there: a post older than that cannot be read, however far you page. Say so
+  rather than retrying; to find an older post, search for it (`from:` with
+  `since:` and `until:`).
+- Like `conversation`, it reports a `status` and `reason`: `ok`, or `not_found`
+  (no such account; `reason` `suspended` when FxTwitter says it is), or
+  `protected` (the account's posts are private and no source asked could read
+  them), with no `results` and no `cursor`. Read these as for a post (see
+  below).
+- Through the reading account a page takes one read, and the first read of a
+  handle in 7 days takes two, since the account's user id is looked up first;
+  it is remembered for 7 days (200 handles at most), so the next pages take one
+  read each.
+
 ## Pages
 
-`search`, `quotes`, `mentions` and `conversation` return a page: `results`
-(posts, in the source's order), `source`, and `cursor`.
+`search`, `quotes`, `mentions`, `conversation` and `timeline` return a page:
+`results` (posts, in the source's order), `source`, and `cursor`.
 
 - `limit` (1 to 50, 20 by default; not for `conversation`) is an upper bound. A
   page is one request to its source, and X ends most pages near 20 posts
   whatever is asked, so a page may hold fewer than `limit` with more to come:
   follow `cursor`, not the count.
 - To continue, pass the `cursor` of the last page with the same `method` and
-  the same arguments (`query` and `feed`, `post` (and `sort`), or `handle` and
-  `since`); a `null` cursor is the end. A cursor continues only on the source
+  the same arguments (`query` and `feed`, `post` (and `sort`), `handle` and
+  `since`, or `handle` and `tab`); a `null` cursor is the end. A cursor continues only on the source
   that gave it: asking for another source, other arguments or another method
   fails as `invalid_argument` before anything is read. `limit` and `account` may
   change between pages; `source` must stay as it was, or be `auto`.
@@ -110,8 +134,9 @@ post answers.
 
 ## What each status means
 
-(`view` items, and the `status` of `conversation` and `thread`, which have no
-`not_read`: a failure there fails the call.)
+(`view` items, and the `status` of `conversation`, `thread` and `timeline`,
+which have no `not_read`: a failure there fails the call. For a `timeline` they
+say what the account came to, and it has no post to hold.)
 
 - `ok`: `post` holds the author (`handle`, `name`, `id`), the text, `created_at`,
   `lang`, `media`, `links`, `counts` (a count the source did not give is
