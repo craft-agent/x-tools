@@ -44,8 +44,9 @@ WAIT_INTERVAL_SECONDS = 2
 # The twscrape exceptions that mean X answered with an error (`ApiError` is an `AbortReqError`).
 X_ERRORS = ("AbortReqError", "ApiError", "XClIdParseError")
 PARSE_ERRORS = ("ParseError",)
-# A post id: decimal digits only (not `\d`, which takes other scripts' digits), as X's ids are.
-POST_ID = re.compile(r"[0-9]{1,20}")
+# An X id (post or user): decimal digits only (not `\d`, which takes other scripts' digits).
+MAX_ID_DIGITS = 20
+DECIMAL_ID = re.compile(rf"[0-9]{{1,{MAX_ID_DIGITS}}}")
 VIDEO_MP4 = "video/mp4"
 MILLISECONDS = 1000
 # The arguments of `search`, and what each may hold.
@@ -110,10 +111,10 @@ THREAD_FEATURES = {
 }
 # The argument of `user`: an X handle, without the `@` (not `\w`, which takes other scripts' letters).
 USER_ARGS = frozenset({"handle"})
-HANDLE = re.compile(r"[A-Za-z0-9_]{1,15}")
-# The arguments of `timeline`, and what each may hold: a user id is decimal digits, as X's ids are.
+MAX_HANDLE_LENGTH = 15
+HANDLE = re.compile(rf"[A-Za-z0-9_]{{1,{MAX_HANDLE_LENGTH}}}")
+# The arguments of `timeline`, and what each may hold.
 TIMELINE_ARGS = frozenset({"user_id", "tab", "count", "cursor"})
-USER_ID = re.compile(r"[0-9]{1,20}")
 # The twscrape operation each tab of a profile's timeline reads (`user_tweets_raw`, `user_tweets_and_replies_raw`,
 # `user_media_raw`), the variables it sends beside `userId` and `count` (twscrape keeps them inside the function),
 # and the toggles of the one that sends any.
@@ -324,11 +325,15 @@ def check() -> dict:
         raise Failure("error", "twscrape is not installed in the engine") from None
 
 
+def check_id_arg(value: object, field: str, label: str) -> None:
+    """Raises `Failure("invalid_request")` unless `value` is a decimal id string of 1 to 20 digits."""
+    if not isinstance(value, str) or DECIMAL_ID.fullmatch(value) is None:
+        raise Failure("invalid_request", f"args.{field} is not a {label} of 1 to {MAX_ID_DIGITS} digits")
+
+
 def check_post_args(args: dict) -> None:
     """Raises `Failure("invalid_request")` unless `args.id` is a decimal string of 1 to 20 digits."""
-    post_id = args.get("id")
-    if not isinstance(post_id, str) or POST_ID.fullmatch(post_id) is None:
-        raise Failure("invalid_request", "args.id is not a post id of 1 to 20 digits")
+    check_id_arg(args.get("id"), "id", "post id")
 
 
 def iso_utc(moment: datetime) -> str:
@@ -407,6 +412,12 @@ def check_cursor_arg(cursor: object) -> None:
         raise Failure("invalid_request", f"args.cursor is not null or a text of 1 to {MAX_CURSOR_LENGTH} characters")
 
 
+def check_count_arg(count: object) -> None:
+    """Raises `Failure("invalid_request")` unless `count` is a whole number from 1 to `MAX_COUNT`."""
+    if not isinstance(count, int) or isinstance(count, bool) or not 1 <= count <= MAX_COUNT:
+        raise Failure("invalid_request", f"args.count is not a whole number from 1 to {MAX_COUNT}")
+
+
 def check_search_args(args: dict) -> None:
     """Raises `Failure("invalid_request")` unless `args` holds exactly a query, a product, a count and a cursor.
 
@@ -419,8 +430,7 @@ def check_search_args(args: dict) -> None:
         raise Failure("invalid_request", f"args.query is not a text of 1 to {MAX_QUERY_LENGTH} characters")
     if not isinstance(product, str) or product not in SEARCH_PRODUCTS:
         raise Failure("invalid_request", f"args.product is not one of {', '.join(SEARCH_PRODUCTS)}")
-    if not isinstance(count, int) or isinstance(count, bool) or not 1 <= count <= MAX_COUNT:
-        raise Failure("invalid_request", f"args.count is not a whole number from 1 to {MAX_COUNT}")
+    check_count_arg(count)
     check_cursor_arg(cursor)
 
 
@@ -449,6 +459,13 @@ async def request_page(
     return timeline, in_timeline_order(api, timeline, list(parse_tweets(rep)))
 
 
+def paged_posts(api: Any, timeline: dict, tweets: list[Any], count: int) -> dict:
+    """One page of posts capped to `count`, with the bottom cursor when non-empty."""
+    tweets = tweets[:count]
+    cursor = api._get_cursor(timeline, BOTTOM_CURSOR) if tweets else None
+    return {"posts": [post_of(tweet) for tweet in tweets], "cursor": cursor}
+
+
 @operation("search", check_args=check_search_args)
 async def read_search(api: Any, args: dict) -> dict:
     """One page of X's search: `{"posts": [...], "cursor": str | None}`, in the order the timeline lists them.
@@ -473,9 +490,7 @@ async def read_search(api: Any, args: dict) -> dict:
         if SEARCH_REFUSED_MARKER not in str(exc):
             raise
         raise Failure("search_refused", SEARCH_REFUSED_MESSAGE) from exc
-    tweets = tweets[: args["count"]]
-    cursor = api._get_cursor(timeline, BOTTOM_CURSOR) if tweets else None
-    return {"posts": [post_of(tweet) for tweet in tweets], "cursor": cursor}
+    return paged_posts(api, timeline, tweets, args["count"])
 
 
 def check_conversation_args(args: dict) -> None:
@@ -618,7 +633,9 @@ def check_user_args(args: dict) -> None:
         raise Failure("invalid_request", "args does not hold exactly handle")
     handle = args["handle"]
     if not isinstance(handle, str) or HANDLE.fullmatch(handle) is None:
-        raise Failure("invalid_request", "args.handle is not a handle of 1 to 15 letters, digits or underscores")
+        raise Failure(
+            "invalid_request", f"args.handle is not a handle of 1 to {MAX_HANDLE_LENGTH} letters, digits or underscores"
+        )
 
 
 def user_of(user: Any) -> dict:
@@ -662,12 +679,10 @@ def check_timeline_args(args: dict) -> None:
     if set(args) != TIMELINE_ARGS:
         raise Failure("invalid_request", "args does not hold exactly user_id, tab, count and cursor")
     user_id, tab, count = args["user_id"], args["tab"], args["count"]
-    if not isinstance(user_id, str) or USER_ID.fullmatch(user_id) is None:
-        raise Failure("invalid_request", "args.user_id is not a user id of 1 to 20 digits")
+    check_id_arg(user_id, "user_id", "user id")
     if not isinstance(tab, str) or tab not in TIMELINE_OPERATIONS:
         raise Failure("invalid_request", f"args.tab is not one of {', '.join(TIMELINE_OPERATIONS)}")
-    if not isinstance(count, int) or isinstance(count, bool) or not 1 <= count <= MAX_COUNT:
-        raise Failure("invalid_request", f"args.count is not a whole number from 1 to {MAX_COUNT}")
+    check_count_arg(count)
     check_cursor_arg(args["cursor"])
 
 
@@ -692,9 +707,7 @@ async def read_timeline(api: Any, args: dict) -> dict:
     timeline, tweets = await request_page(api, operation_id, variables, toggles=TIMELINE_TOGGLES.get(tab))
     if tab == "media":
         tweets = [tweet for tweet in tweets if has_media(tweet)]
-    tweets = tweets[: args["count"]]
-    cursor = api._get_cursor(timeline, BOTTOM_CURSOR) if tweets else None
-    return {"posts": [post_of(tweet) for tweet in tweets], "cursor": cursor}
+    return paged_posts(api, timeline, tweets, args["count"])
 
 
 def failure_kind(exc: Exception, twscrape: Any) -> str:
