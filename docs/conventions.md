@@ -611,6 +611,17 @@ and every entry point checks them the same way.
   pacing, what X last made of the session and a handle → user id cache. One
   directory per label means a label is moved, backed up or removed as a
   whole.
+- **The handle → user id cache is a label's, and short-lived.** X's reads of an
+  account's posts take its user id, not its handle, so a label remembers the ids
+  it looked up in `user-ids.json` (a private file, written atomically): each
+  entry holds the id and when it was read, is used for 7 days and then asked
+  again, and the file keeps at most 200 handles, dropping the oldest. With an id
+  remembered an account's posts take one read of X instead of two; a handle can
+  change hands, so an entry that outlived a week could read the wrong account.
+  It is a cache: a missing, unreadable or malformed file reads as empty, a failed
+  write is ignored, and there is no lock, since two writers at once only lose an
+  entry. Tools reach it through the reader, never the file, and removing a label
+  removes it with the directory.
 - **`account` picks the label.** Left out, it picks the only label; with
   several, the call fails as `invalid_argument` and lists them. One account is
   the common case and needs no argument, while several never depend on which
