@@ -75,7 +75,7 @@ export function userFromAccount(data: unknown, readAt: string): User {
 }
 
 /** The rows of a page of users: the bridge's `users`, each as its `user` operation gives an account. */
-const ACCOUNT_USER_ROWS: AccountRows<User> = { key: "users", read: userFromAccount }
+export const ACCOUNT_USER_ROWS: AccountRows<User> = { key: "users", read: userFromAccount }
 
 /**
  * Reads the profile of the account `handle` through the reading account

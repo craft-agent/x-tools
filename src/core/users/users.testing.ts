@@ -1,12 +1,14 @@
+import { statusPath } from "../posts/view.testing"
 import { encodeCursor } from "../sources/cursor"
 import { DEFAULT_LIMIT } from "../sources/page"
 import type { ReaderOverrides } from "../sources/reader"
 import type { SourcesFixture } from "../sources/sources.testing"
 import type { Answerer } from "../sources/source"
 import type { ToolOptions } from "../tool"
+import type { FollowDirection } from "./follows"
 import type { UserReadInput } from "./schemas"
 
-/** Fixtures the user tests share: FxTwitter's v2 profile as its schema writes it, the bridge's user dict, the arguments of each method and a reading account that answers its `user` and `user_search` operations, with made-up ids and handles. */
+/** Fixtures the user tests share: FxTwitter's v2 profile as its schema writes it, the bridge's user dict, the arguments of each method and a reading account that answers its `user`, `user_search`, `follows` and `reposters` operations, with made-up ids and handles. */
 
 export const USER_ID = "4001"
 
@@ -81,7 +83,7 @@ export function accountProfile(fields: Json = {}): Json {
   }
 }
 
-/** What the bridge's `user_search` operation gives: the accounts of `handles`, and the cursor of the next page. */
+/** What the bridge's `user_search`, `follows` and `reposters` operations give: the accounts of `handles`, and the cursor of the next page. */
 export const accountUsersPage = (handles: string[], cursor: string | null = null) => ({
   users: handles.map((handle) => accountProfile({ username: handle })),
   cursor,
@@ -110,14 +112,45 @@ export const searchPath = (params: Record<string, string>): string => `/2/search
 /** The path FxTwitter is asked for the first page of a search of users for `query`. */
 export const firstSearchPath = (query: string): string => searchPath({ q: query, count: String(DEFAULT_LIMIT) })
 
-/** The cursor a search of users gets for `own` from `source`, for the `args` that decide what it reads. */
-export const cursorOf = (source: Answerer, args: Record<string, unknown>, own: string) =>
-  encodeCursor({ source, read: "user_search", args, cursor: own })
+/** Arguments for `readFollows` of `direction`. */
+export const follows = (
+  direction: FollowDirection,
+  handle: string,
+  extra: Partial<UserReadInput> = {},
+): UserReadInput => ({ method: direction, handle, ...extra })
+
+/** Arguments for `repostersOfPost`. */
+export const reposters = (post: string, extra: Partial<UserReadInput> = {}): UserReadInput => ({
+  method: "reposters",
+  post,
+  ...extra,
+})
+
+/** The path and query string FxTwitter is asked for the followers or following of an account: `params` in the order the code writes them. */
+export const followsPath = (
+  handle: string,
+  direction: FollowDirection,
+  params: Record<string, string> = { count: String(DEFAULT_LIMIT) },
+): string => `${profilePath(handle)}/${direction}?${new URLSearchParams(params)}`
+
+/** The path and query string FxTwitter is asked for the reposters of post `id`. */
+export const repostsPath = (id: string, params: Record<string, string> = { count: String(DEFAULT_LIMIT) }): string =>
+  `${statusPath(id)}/reposts?${new URLSearchParams(params)}`
+
+/** The cursor a read of users gets for `own` from `source`, for the `args` that decide what it reads; a search of users unless `read` says otherwise. */
+export const cursorOf = (source: Answerer, args: Record<string, unknown>, own: string, read = "user_search") =>
+  encodeCursor({ source, read, args, cursor: own })
 
 /** What the reading account answers each operation with; `undefined` for one the test does not expect. */
-export type UserAnswers = { user?: unknown; user_search?: unknown }
+export type UserAnswers = { user?: unknown; user_search?: unknown; follows?: unknown; reposters?: unknown }
 
-/** A reader whose reading account answers the `user` operation with `answers.user` and `user_search` with `answers.user_search`; each read is recorded in `h.accountReads`. */
+/** What the bridge was asked in `h`, per read. */
+export const asked = (h: SourcesFixture) => h.accountReads.map(({ op, args }) => ({ op, args }))
+
+/** The handles of a user list result's items. */
+export const handlesOf = (result: { results?: { handle: string }[] }) => result.results?.map((user) => user.handle)
+
+/** A reader whose reading account answers each operation with its entry of `answers`; each read is recorded in `h.accountReads`. */
 export function readerUsers(
   h: SourcesFixture,
   answers: UserAnswers,
@@ -127,8 +160,7 @@ export function readerUsers(
   return h.reader(options, {
     readAccount: async (readOptions) => {
       h.accountReads.push(readOptions)
-      const data = readOptions.op === "user" ? answers.user : answers.user_search
-      return { account: readOptions.account ?? "default", data }
+      return { account: readOptions.account ?? "default", data: answers[readOptions.op as keyof UserAnswers] }
     },
     ...overrides,
   })

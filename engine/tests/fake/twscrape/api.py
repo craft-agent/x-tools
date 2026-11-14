@@ -5,6 +5,9 @@ from .accounts_pool import AccountsPool
 from .models import Tweet, User
 from .utils import find_obj, get_by_path
 
+OP_Followers = "Xe3y9_ndZ9-RtWz8zd_wpg/Followers"
+OP_Following = "eDqlbOS46zda8jDT8dEQ_Q/Following"
+OP_Retweeters = "VzgCyBwfqzAvPjK2E4U2vA/Retweeters"
 OP_SearchTimeline = "vLHjqbDv7TPFMBkIIO1nOA/SearchTimeline"
 OP_TweetDetail = "dQDdKtt882nl-Km98FJGSQ/TweetDetail"
 OP_UserMedia = "iTSlWbsmD00dAE7Sk9xvIw/UserMedia"

@@ -1,16 +1,15 @@
 """The `user_search` operation: one page of X's search for accounts, as the compact users and the next cursor."""
 
-import json
 import unittest
 
-from support import COOKIES, CSRF, TOKEN, BridgeTest, handle, make_request
+from support import COOKIES, CSRF, TOKEN, handle, make_request
 from test_masking import leaked
-from timelines import cursor_entry, page, user_entry
+from timelines import cursor_entry, user_entry
 from tweets import make_user
 from twscrape import AbortReqError
 from twscrape import api as fake_api
+from user_pages import FIRST, SECOND, THIRD, UserPageTest, user_ids
 
-FIRST, SECOND, THIRD = 4001, 4002, 4003
 VALID_ARGS = {"query": "reading slowly", "count": 20, "cursor": None}
 TWSCRAPE_404_ERROR = "Failed to get XClIdGen. See: https://github.com/vladkens/twscrape/issues/248"
 REFUSED_ERROR = "X refused the search: X answers 404 to a search by an account whose phone is not verified"
@@ -20,28 +19,7 @@ def user_search_request(**args) -> dict:
     return make_request("user_search", args={**VALID_ARGS, **args})
 
 
-def user_ids(reply: dict) -> list[str]:
-    return [user["id"] for user in reply["data"]["users"]]
-
-
-class UserSearchTest(BridgeTest):
-    def setUp(self):
-        fake_api.PEOPLE.clear()
-        fake_api.GQL_ITEMS.clear()
-        fake_api.GQL_REPLY = None
-        fake_api.GQL_ERROR = None
-        self.addCleanup(fake_api.PEOPLE.clear)
-        self.addCleanup(setattr, fake_api, "GQL_REPLY", None)
-        self.addCleanup(setattr, fake_api, "GQL_ERROR", None)
-
-    def answer_with(self, *entries: dict, users: tuple[int, ...] = ()) -> None:
-        """Scripts the page X answers with; `users` are the ids twscrape can parse, else those of the entries."""
-        for id in users:
-            fake_api.PEOPLE[id] = make_user(username=f"user_{id}", id=id, displayname=f"User {id}")
-        fake_api.GQL_REPLY = page(*entries)
-
-
-class TestPage(UserSearchTest):
+class TestPage(UserPageTest):
     def test_a_page_is_the_users_and_the_next_cursor(self):
         self.answer_with(user_entry(FIRST), user_entry(SECOND), cursor_entry("next-page"), users=(FIRST, SECOND))
         reply = handle(user_search_request())
@@ -121,7 +99,7 @@ class TestPage(UserSearchTest):
         self.assert_ok(handle(user_search_request()), {"users": [], "cursor": None}, contacted=True)
 
 
-class TestFailures(UserSearchTest):
+class TestFailures(UserPageTest):
     def test_no_reply_is_no_account(self):
         reply = handle(user_search_request())
         self.assert_failure(reply, "no_account", contacted=True)
@@ -150,7 +128,7 @@ class TestFailures(UserSearchTest):
         self.assert_failure(handle(user_search_request()), "error", contacted=True)
 
 
-class TestArguments(UserSearchTest):
+class TestArguments(UserPageTest):
     def test_an_invalid_argument_is_rejected_before_anything_is_contacted(self):
         missing = {key: value for key, value in VALID_ARGS.items() if key != "cursor"}
         invalid = {
@@ -172,17 +150,7 @@ class TestArguments(UserSearchTest):
             "a cursor of 2001 characters": ({**VALID_ARGS, "cursor": "c" * 2001}, "c" * 2001),
             "a number as cursor": ({**VALID_ARGS, "cursor": 5}, None),
         }
-        before = len(fake_api.CONSTRUCTED)
-        for name, (args, echoed) in invalid.items():
-            with self.subTest(name):
-                reply = handle(make_request("user_search", args=args))
-                self.assert_failure(reply, "invalid_request", contacted=False)
-                self.assertIsNone(reply["fingerprint"])
-                self.assertIsNone(reply["session"])
-                if echoed is not None:
-                    self.assertNotIn(echoed, json.dumps(reply))
-        self.assertEqual(len(fake_api.CONSTRUCTED), before)
-        self.assertEqual(fake_api.GQL_ITEMS, [])
+        self.assert_invalid_before_contact("user_search", invalid)
 
     def test_the_limits_themselves_are_taken(self):
         self.answer_with(user_entry(FIRST), users=(FIRST,))
@@ -197,7 +165,7 @@ class TestArguments(UserSearchTest):
                 self.assertTrue(handle(user_search_request(**args))["ok"])
 
 
-class TestMasking(UserSearchTest):
+class TestMasking(UserPageTest):
     def test_cookie_values_in_a_user_or_the_cursor_are_masked(self):
         fake_api.PEOPLE[FIRST] = make_user(displayname=f"leaked {TOKEN} and {COOKIES}")
         self.answer_with(user_entry(FIRST), cursor_entry(f"cursor-{CSRF}"))

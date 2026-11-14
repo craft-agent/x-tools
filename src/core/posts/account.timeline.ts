@@ -16,7 +16,11 @@ const TIMELINE_OPERATION = "timeline"
 const userDataSchema = z.object({ id: z.string().regex(USER_ID_PATTERN) })
 
 /** The user id of `handle` for the reading account `account`: the one it remembers, else one read of X, which it then remembers; null when X shows no such account. */
-async function resolveUserId(reader: Reader, handle: string, account: string | undefined): Promise<string | null> {
+export async function resolveUserId(
+  reader: Reader,
+  handle: string,
+  account: string | undefined,
+): Promise<string | null> {
   const remembered = await reader.userId(handle, account)
   if (remembered !== null) return remembered
   const { data } = await reader.account(USER_OPERATION, { handle }, account)

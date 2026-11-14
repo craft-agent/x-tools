@@ -806,6 +806,12 @@ and every entry point checks them the same way.
 - **A profile read through the reading account remembers the handle's user
   id**, as "Accounts and state" describes, so a `timeline` of that handle
   through the same label takes one read instead of two.
+- **Three lists name other accounts: `followers` and `following` of a handle,
+  and the `reposters` of a post.** Each is a page of users, as a search is,
+  and reads like every paged read. An account's followers or following
+  through the reading account need its user id, as its posts do: the first read
+  of a handle in 7 days takes two reads and the next ones one. Who liked a post
+  is not among them (see "What the tools never read").
 
 ## What the tools never read
 

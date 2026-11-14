@@ -88,7 +88,7 @@ export function userFromFxTwitter(row: unknown, readAt: string): User {
 }
 
 /** The rows of a list of users: its profiles. */
-const FX_USER_ROWS: FxRows<User> = {
+export const FX_USER_ROWS: FxRows<User> = {
   isItem: (row) => isRowOfType(row, PROFILE_TYPE),
   read: userFromFxTwitter,
 }

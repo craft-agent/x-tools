@@ -144,6 +144,16 @@ TIMELINE_VARIABLES = {
     },
 }
 TIMELINE_TOGGLES = {"media": {"withArticlePlainText": False}}
+# The arguments of `follows` and `reposters`.
+FOLLOWS_ARGS = frozenset({"user_id", "direction", "count", "cursor"})
+REPOSTERS_ARGS = frozenset({"id", "count", "cursor"})
+# The twscrape operation each direction of `follows` reads (`followers_raw`, `following_raw`), the variables each
+# sends beside `userId` and `count` (twscrape keeps them inside the function), and the features of the one that sends any.
+FOLLOWS_OPERATIONS = {"followers": "OP_Followers", "following": "OP_Following"}
+FOLLOWS_VARIABLES = {"includePromotedContent": False}
+FOLLOWS_FEATURES = {"followers": {"responsive_web_twitter_article_notes_tab_enabled": False}}
+# What `retweeters_raw` sends beside `tweetId` and `count`.
+REPOSTERS_VARIABLES = {"includePromotedContent": True}
 # A timeline entry's id ends in the id of the post it holds: `tweet-<id>`, or `<prefix>-<id>` in a module.
 ENTRY_POST_ID = re.compile(r"-([0-9]+)$")
 # A people-search entry's id is `user-<id>`.
@@ -490,6 +500,25 @@ def paged_posts(api: Any, timeline: dict, tweets: list[Any], count: int) -> dict
     return paged_items(api, timeline, tweets, count, "posts", post_of)
 
 
+async def read_users_page(
+    api: Any, operation_id: str, variables: dict, count: int, ft: dict | None = None, toggles: dict | None = None
+) -> dict:
+    """One page of accounts from one `_gql_item` request: `{"users": [...], "cursor": str | None}`.
+
+    The users are those X lists, in the order it lists them, as many as `count`; a page without users has no cursor.
+    """
+    parse_users = importlib.import_module(f"{TWSCRAPE}.models").parse_users
+    timeline, users = await request_page(
+        api, operation_id, variables, ft=ft, toggles=toggles, parse=parse_users, entry_id=ENTRY_USER_ID
+    )
+    return paged_items(api, timeline, users, count, "users", user_of)
+
+
+def with_cursor(variables: dict, cursor: str | None) -> dict:
+    """`variables` with `cursor` added when one is given."""
+    return {**variables, "cursor": cursor} if cursor is not None else variables
+
+
 def search_variables(args: dict, product: str) -> dict:
     """The variables of a SearchTimeline request for `args` (a query, a count and a cursor) in `product`."""
     variables = {
@@ -498,9 +527,7 @@ def search_variables(args: dict, product: str) -> dict:
         "product": product,
         "querySource": SEARCH_QUERY_SOURCE,
     }
-    if args["cursor"] is not None:
-        variables["cursor"] = args["cursor"]
-    return variables
+    return with_cursor(variables, args["cursor"])
 
 
 @contextlib.contextmanager
@@ -551,13 +578,9 @@ async def read_user_search(api: Any, args: dict) -> dict:
     `Failure("search_refused")` as `search` does, since X refuses both alike.
     """
     operation_id = importlib.import_module(f"{TWSCRAPE}.api").OP_SearchTimeline
-    parse_users = importlib.import_module(f"{TWSCRAPE}.models").parse_users
     variables = search_variables(args, USER_SEARCH_PRODUCT)
     with refusal_of_search():
-        timeline, users = await request_page(
-            api, operation_id, variables, toggles=SEARCH_TOGGLES, parse=parse_users, entry_id=ENTRY_USER_ID
-        )
-    return paged_items(api, timeline, users, args["count"], "users", user_of)
+        return await read_users_page(api, operation_id, variables, args["count"], toggles=SEARCH_TOGGLES)
 
 
 def check_conversation_args(args: dict) -> None:
@@ -644,12 +667,13 @@ async def read_conversation(api: Any, args: dict) -> dict | None:
     None once a page holds no reply.
     """
     api_module = importlib.import_module(f"{TWSCRAPE}.api")
-    variables = {
-        **detail_variables(args["id"], CONVERSATION_REFERRER, with_rux_injections=True),
-        "rankingMode": args["ranking"],
-    }
-    if args["cursor"] is not None:
-        variables["cursor"] = args["cursor"]
+    variables = with_cursor(
+        {
+            **detail_variables(args["id"], CONVERSATION_REFERRER, with_rux_injections=True),
+            "rankingMode": args["ranking"],
+        },
+        args["cursor"],
+    )
     toggles = getattr(api_module, "ARTICLE_FIELD_TOGGLES", None)
     timeline, tweets = await read_detail_page(api, variables, toggles=toggles)
     focal = focal_of(tweets, args["id"])
@@ -768,13 +792,70 @@ async def read_timeline(api: Any, args: dict) -> dict:
     """
     tab = args["tab"]
     operation_id = getattr(importlib.import_module(f"{TWSCRAPE}.api"), TIMELINE_OPERATIONS[tab])
-    variables = {"userId": args["user_id"], "count": args["count"], **TIMELINE_VARIABLES[tab]}
-    if args["cursor"] is not None:
-        variables["cursor"] = args["cursor"]
+    variables = with_cursor(
+        {"userId": args["user_id"], "count": args["count"], **TIMELINE_VARIABLES[tab]},
+        args["cursor"],
+    )
     timeline, tweets = await request_page(api, operation_id, variables, toggles=TIMELINE_TOGGLES.get(tab))
     if tab == "media":
         tweets = [tweet for tweet in tweets if has_media(tweet)]
     return paged_posts(api, timeline, tweets, args["count"])
+
+
+def check_follows_args(args: dict) -> None:
+    """Raises `Failure("invalid_request")` unless `args` holds exactly a user id, a direction, a count and a cursor.
+
+    The messages name the argument and never repeat its value.
+    """
+    if set(args) != FOLLOWS_ARGS:
+        raise Failure("invalid_request", "args does not hold exactly user_id, direction, count and cursor")
+    direction = args["direction"]
+    check_id_arg(args["user_id"], "user_id", "user id")
+    if not isinstance(direction, str) or direction not in FOLLOWS_OPERATIONS:
+        raise Failure("invalid_request", f"args.direction is not one of {', '.join(FOLLOWS_OPERATIONS)}")
+    check_count_arg(args["count"])
+    check_cursor_arg(args["cursor"])
+
+
+def check_reposters_args(args: dict) -> None:
+    """Raises `Failure("invalid_request")` unless `args` holds exactly a post id, a count and a cursor.
+
+    The messages name the argument and never repeat its value.
+    """
+    if set(args) != REPOSTERS_ARGS:
+        raise Failure("invalid_request", "args does not hold exactly id, count and cursor")
+    check_post_args(args)
+    check_count_arg(args["count"])
+    check_cursor_arg(args["cursor"])
+
+
+@operation("follows", check_args=check_follows_args)
+async def read_follows(api: Any, args: dict) -> dict:
+    """One page of an account's followers or of the accounts it follows: `{"users": [...], "cursor": str | None}`.
+
+    The one request is made here, with the operation, variables and features twscrape's own reading of the direction
+    sends (but for `count`): twscrape pages inside a generator. The users are those X lists, in the order it lists
+    them, as many as `count`; a page without users has no cursor.
+    """
+    direction = args["direction"]
+    operation_id = getattr(importlib.import_module(f"{TWSCRAPE}.api"), FOLLOWS_OPERATIONS[direction])
+    variables = {"userId": args["user_id"], "count": args["count"], **FOLLOWS_VARIABLES}
+    return await read_users_page(
+        api, operation_id, with_cursor(variables, args["cursor"]), args["count"], ft=FOLLOWS_FEATURES.get(direction)
+    )
+
+
+@operation("reposters", check_args=check_reposters_args)
+async def read_reposters(api: Any, args: dict) -> dict:
+    """One page of the accounts that reposted a post: `{"users": [...], "cursor": str | None}`.
+
+    The one request is made here, with the variables twscrape's `retweeters` sends (but for `count`): twscrape pages
+    inside a generator. The users are those X lists, in the order it lists them, as many as `count`; a page without
+    users has no cursor.
+    """
+    operation_id = importlib.import_module(f"{TWSCRAPE}.api").OP_Retweeters
+    variables = {"tweetId": args["id"], "count": args["count"], **REPOSTERS_VARIABLES}
+    return await read_users_page(api, operation_id, with_cursor(variables, args["cursor"]), args["count"])
 
 
 def failure_kind(exc: Exception, twscrape: Any) -> str:

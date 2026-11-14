@@ -10,6 +10,9 @@ const PAGED_ARGUMENTS: readonly ArgumentName[] = ["limit", "cursor"]
 const METHOD_ARGUMENTS: Readonly<Record<UserMethod, readonly ArgumentName[]>> = {
   view: ["handle"],
   search: ["query", ...PAGED_ARGUMENTS],
+  followers: ["handle", ...PAGED_ARGUMENTS],
+  following: ["handle", ...PAGED_ARGUMENTS],
+  reposters: ["post", ...PAGED_ARGUMENTS],
 }
 
 /** The argument rules of `x_user_read`'s methods: what a method refuses and what it requires. */
