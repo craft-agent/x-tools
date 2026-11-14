@@ -10,11 +10,13 @@ const PLUGIN = fileURLToPath(new URL("../dist/opencode.js", import.meta.url))
 const SERVER = fileURLToPath(new URL("../dist/mcp.js", import.meta.url))
 const ACCOUNT_READ = "x_account_read"
 const POST_READ = "x_post_read"
-/** A read that only the reading account may answer, so that it never reaches FxTwitter or X: none is set up in the empty state directory. */
-const POST_VIEW_ACCOUNT_ONLY = { method: "view", posts: ["20"], source: "account" }
-const POST_SEARCH_ACCOUNT_ONLY = { method: "search", query: "x", source: "account" }
-const POST_CONVERSATION_ACCOUNT_ONLY = { method: "conversation", post: "20", source: "account" }
-const POST_TIMELINE_ACCOUNT_ONLY = { method: "timeline", handle: "x", source: "account" }
+/** Reads that only the reading account may answer, so they never reach FxTwitter or X: none is set up in the empty state directory. */
+const POST_ACCOUNT_ONLY_READS = [
+  { method: "view", posts: ["20"], source: "account" },
+  { method: "search", query: "x", source: "account" },
+  { method: "conversation", post: "20", source: "account" },
+  { method: "timeline", handle: "x", source: "account" },
+]
 const NO_ACCOUNT_ERROR = /^not_found: No reading account is set up yet\./
 const stateDir = mkdtempSync(join(tmpdir(), "opencode-smoke-"))
 
@@ -45,10 +47,9 @@ async function expectNoAccountError(run, label) {
 /** Expects `version` to read no accounts from `ACCOUNT_READ` and fail `POST_READ` with `not_found`, for a view, a search, a conversation and a timeline. */
 async function checkOpenCodeVersion(version, readAccount, runPost) {
   expectEmptyAccounts(await readAccount(), `${version} ${ACCOUNT_READ}`)
-  await expectNoAccountError(() => runPost(POST_VIEW_ACCOUNT_ONLY), `${version} ${POST_READ} view`)
-  await expectNoAccountError(() => runPost(POST_SEARCH_ACCOUNT_ONLY), `${version} ${POST_READ} search`)
-  await expectNoAccountError(() => runPost(POST_CONVERSATION_ACCOUNT_ONLY), `${version} ${POST_READ} conversation`)
-  await expectNoAccountError(() => runPost(POST_TIMELINE_ACCOUNT_ONLY), `${version} ${POST_READ} timeline`)
+  for (const args of POST_ACCOUNT_ONLY_READS) {
+    await expectNoAccountError(() => runPost(args), `${version} ${POST_READ} ${args.method}`)
+  }
 }
 
 /** The tool names the MCP server lists with default settings; it draws on the same registry as the plugin. */

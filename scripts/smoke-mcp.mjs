@@ -12,11 +12,13 @@ const EXIT_USAGE = 2
 const UNKNOWN_TOOL = "unknown_nonexistent_read"
 const ACCOUNT_READ = "x_account_read"
 const POST_READ = "x_post_read"
-/** A read that only the reading account may answer, so that it never reaches FxTwitter or X: none is set up in the empty state directory. */
-const POST_VIEW_ACCOUNT_ONLY = { method: "view", posts: ["20"], source: "account" }
-const POST_SEARCH_ACCOUNT_ONLY = { method: "search", query: "x", source: "account" }
-const POST_CONVERSATION_ACCOUNT_ONLY = { method: "conversation", post: "20", source: "account" }
-const POST_TIMELINE_ACCOUNT_ONLY = { method: "timeline", handle: "x", source: "account" }
+/** Reads that only the reading account may answer, so they never reach FxTwitter or X: none is set up in the empty state directory. */
+const POST_ACCOUNT_ONLY_READS = [
+  { method: "view", posts: ["20"], source: "account" },
+  { method: "search", query: "x", source: "account" },
+  { method: "conversation", post: "20", source: "account" },
+  { method: "timeline", handle: "x", source: "account" },
+]
 const stateDir = mkdtempSync(join(tmpdir(), "mcp-smoke-"))
 
 function expectReadTool(tools, name) {
@@ -58,14 +60,10 @@ async function listTools() {
     console.log(`${ACCOUNT_READ} returns no accounts and a missing engine from an empty state directory.`)
 
     expectReadTool(tools, POST_READ)
-    const view = await client.callTool({ name: POST_READ, arguments: POST_VIEW_ACCOUNT_ONLY })
-    expectErrorResult(view, "not_found", `${POST_READ} view with no reading account`)
-    const search = await client.callTool({ name: POST_READ, arguments: POST_SEARCH_ACCOUNT_ONLY })
-    expectErrorResult(search, "not_found", `${POST_READ} search with no reading account`)
-    const conversation = await client.callTool({ name: POST_READ, arguments: POST_CONVERSATION_ACCOUNT_ONLY })
-    expectErrorResult(conversation, "not_found", `${POST_READ} conversation with no reading account`)
-    const timeline = await client.callTool({ name: POST_READ, arguments: POST_TIMELINE_ACCOUNT_ONLY })
-    expectErrorResult(timeline, "not_found", `${POST_READ} timeline with no reading account`)
+    for (const args of POST_ACCOUNT_ONLY_READS) {
+      const result = await client.callTool({ name: POST_READ, arguments: args })
+      expectErrorResult(result, "not_found", `${POST_READ} ${args.method} with no reading account`)
+    }
     expectEmptyStateDir("Post reads without a reading account must not create state.")
     console.log(
       `${POST_READ} view, search, conversation and timeline with source account give a not_found error result and no reading account.`,
