@@ -490,6 +490,20 @@ def paged_posts(api: Any, timeline: dict, tweets: list[Any], count: int) -> dict
     return paged_items(api, timeline, tweets, count, "posts", post_of)
 
 
+async def read_users_page(
+    api: Any, operation_id: str, variables: dict, count: int, ft: dict | None = None, toggles: dict | None = None
+) -> dict:
+    """One page of accounts from one `_gql_item` request: `{"users": [...], "cursor": str | None}`.
+
+    The users are those X lists, in the order it lists them, as many as `count`; a page without users has no cursor.
+    """
+    parse_users = importlib.import_module(f"{TWSCRAPE}.models").parse_users
+    timeline, users = await request_page(
+        api, operation_id, variables, ft=ft, toggles=toggles, parse=parse_users, entry_id=ENTRY_USER_ID
+    )
+    return paged_items(api, timeline, users, count, "users", user_of)
+
+
 def search_variables(args: dict, product: str) -> dict:
     """The variables of a SearchTimeline request for `args` (a query, a count and a cursor) in `product`."""
     variables = {
@@ -551,13 +565,9 @@ async def read_user_search(api: Any, args: dict) -> dict:
     `Failure("search_refused")` as `search` does, since X refuses both alike.
     """
     operation_id = importlib.import_module(f"{TWSCRAPE}.api").OP_SearchTimeline
-    parse_users = importlib.import_module(f"{TWSCRAPE}.models").parse_users
     variables = search_variables(args, USER_SEARCH_PRODUCT)
     with refusal_of_search():
-        timeline, users = await request_page(
-            api, operation_id, variables, toggles=SEARCH_TOGGLES, parse=parse_users, entry_id=ENTRY_USER_ID
-        )
-    return paged_items(api, timeline, users, args["count"], "users", user_of)
+        return await read_users_page(api, operation_id, variables, args["count"], toggles=SEARCH_TOGGLES)
 
 
 def check_conversation_args(args: dict) -> None:
