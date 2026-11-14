@@ -19,6 +19,7 @@ const METHOD_ARGUMENTS: Readonly<Record<PostMethod, readonly ArgumentName[]>> = 
   conversation: ["post", "sort", "cursor"],
   // X gives a thread whole: no page, no `limit`, no `cursor`.
   thread: ["post"],
+  timeline: ["handle", "tab", ...PAGED_ARGUMENTS],
 }
 
 /** Every argument the schema has, in its order. */

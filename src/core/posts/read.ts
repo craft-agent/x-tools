@@ -6,6 +6,7 @@ import { quotesOfPost } from "./quotes"
 import { postReadInput, postReadOutput, type PostMethod, type PostReadInput, type PostReadOutput } from "./schemas"
 import { searchPosts } from "./search"
 import { threadOfPost } from "./thread"
+import { timelineOfAccount } from "./timeline"
 import { viewPosts } from "./view"
 
 /** One handler per method: a method is added with one file and one entry here. */
@@ -16,6 +17,7 @@ const HANDLERS: Record<PostMethod, (args: PostReadInput, reader: Reader) => Prom
   mentions: mentionsOfAccount,
   conversation: conversationOfPost,
   thread: threadOfPost,
+  timeline: timelineOfAccount,
 }
 
 export const xPostRead = defineTool({
@@ -29,7 +31,8 @@ export const xPostRead = defineTool({
     "`mentions`: the posts mentioning `handle`, newest first, from the day `since` (`YYYY-MM-DD`) on; it is the search `@handle -from:handle`, so it misses what X's search misses. " +
     "`conversation`: `post` with the posts it replies to (`ancestors`, root first, first page only) and a page of its direct replies in `results`, `sort` `top` (the default, by likes) or `latest`; the source sets the page size, so there is no `limit`. " +
     "`thread`: the chain of posts the author of `post` wrote, oldest first in `results`, whole: no `limit` or `cursor`. Both report the post's `status` and `reason` as `view` does. " +
-    "`search`, `quotes`, `mentions` and `conversation` return a page in `results` and a `cursor`: `limit` (not for `conversation`) is an upper bound (20 by default, 50 at most) and a page may hold fewer with more to come, so follow `cursor`, which continues only the same method and arguments on the same source. " +
+    "`timeline`: the posts of the account `handle`, newest first, in `tab` `posts` (the default), `replies` (with its replies) or `media`; X serves only the newest 3,200 or so, so older posts cannot be read; a read through the reading account takes one read, two the first time a handle is seen in 7 days. " +
+    "`search`, `quotes`, `mentions`, `conversation` and `timeline` return a page in `results` and a `cursor`: `limit` (not for `conversation`) is an upper bound (20 by default, 50 at most) and a page may hold fewer with more to come, so follow `cursor`, which continues only the same method and arguments on the same source. " +
     "`source` `auto` (the default) reads FxTwitter, a third party that reads X itself, first and the reading account only when FxTwitter cannot answer; `fxtwitter` and `account` pin one, and the `account_only` setting turns FxTwitter off. " +
     '`not_found` from FxTwitter is final: ask with `source: "account"` to ask X itself. A read through the reading account counts against its caps (a page is one read) and takes a few seconds; a call has about 150 s. ' +
     "A search through a reading account whose phone is not verified fails as `forbidden` (`search_refused`): use `source` `fxtwitter` or `auto`, or another account. " +
