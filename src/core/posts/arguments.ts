@@ -1,10 +1,7 @@
-import { ToolError } from "../errors"
+import { argumentRules } from "../sources/arguments"
 import { postReadInput, type PostMethod, type PostReadInput } from "./schemas"
 
-type ArgumentName = keyof PostReadInput
-
-/** The arguments every method takes. */
-const SHARED_ARGUMENTS: readonly ArgumentName[] = ["method", "source", "account"]
+type ArgumentName = keyof PostReadInput & string
 
 /** The arguments every list that cuts its pages to a size takes. */
 const PAGED_ARGUMENTS: readonly ArgumentName[] = ["limit", "cursor"]
@@ -22,29 +19,9 @@ const METHOD_ARGUMENTS: Readonly<Record<PostMethod, readonly ArgumentName[]>> = 
   timeline: ["handle", "tab", ...PAGED_ARGUMENTS],
 }
 
-/** Every argument the schema has, in its order. */
-const ARGUMENT_NAMES = Object.keys(postReadInput.shape) as ArgumentName[]
-
-/**
- * Throws `invalid_argument` for the first argument `args` carries that its
- * method does not take, naming it and never echoing its value.
- */
-export function refuseForeignArguments(args: PostReadInput): void {
-  const taken = new Set([...SHARED_ARGUMENTS, ...METHOD_ARGUMENTS[args.method]])
-  const foreign = ARGUMENT_NAMES.find((name) => !taken.has(name) && args[name] !== undefined)
-  if (foreign !== undefined) {
-    throw new ToolError("invalid_argument", `${foreign} is not an argument of ${args.method}.`)
-  }
-}
-
-/** The value of the argument `name`, which its method requires: `invalid_argument` naming it when it is left out. */
-export function requireArgument<Name extends ArgumentName>(
-  args: PostReadInput,
-  name: Name,
-): NonNullable<PostReadInput[Name]> {
-  const value = args[name]
-  if (value === undefined || value === null) {
-    throw new ToolError("invalid_argument", `${name} is required by ${args.method}.`)
-  }
-  return value
-}
+/** The argument rules of `x_post_read`'s methods: what a method refuses and what it requires. */
+export const { refuseForeignArguments, requireArgument } = argumentRules<PostReadInput>({
+  names: Object.keys(postReadInput.shape) as ArgumentName[],
+  shared: ["method", "source", "account"],
+  methods: METHOD_ARGUMENTS,
+})
