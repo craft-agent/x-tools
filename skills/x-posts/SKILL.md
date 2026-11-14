@@ -1,17 +1,18 @@
 ---
 name: x-posts
-description: 'Use when reading or checking X (Twitter) posts: what a post says by URL or id (author, time, counts of replies, reposts, likes, quotes and views, media, links, community note, whether it still exists), searching posts ("search X posts", X''s search syntax), who quoted a post ("who quoted this post"), and who mentioned an account ("who mentioned @…"). Reads from FxTwitter first and the reading account when FxTwitter cannot answer; searches, quotes and mentions come in pages. Not for reading a conversation or a thread, an account''s own posts, profiles or followers (those come later), or for anything that writes to X.'
+description: 'Use when reading or checking X (Twitter) posts: what a post says by URL or id (author, time, counts of replies, reposts, likes, quotes and views, media, links, community note, whether it still exists), searching posts ("search X posts", X''s search syntax), who quoted a post ("who quoted this post"), who mentioned an account ("who mentioned @…"), the replies to a post and the posts it replies to ("read the conversation"), and an author''s own chain of posts ("read the thread"). Reads from FxTwitter first and the reading account when FxTwitter cannot answer; searches, quotes, mentions and replies come in pages. Not for an account''s own posts, profiles or followers (those come later), or for anything that writes to X.'
 metadata:
   toolset: posts
 ---
 
 # Reading posts
 
-| Tool          | Does                                                                              | Writes |
-| ------------- | --------------------------------------------------------------------------------- | ------ |
-| `x_post_read` | reads posts by URL or id, searches them, and reads quotes and mentions (`method`) | no     |
+| Tool          | Does                                                                                                  | Writes |
+| ------------- | ----------------------------------------------------------------------------------------------------- | ------ |
+| `x_post_read` | reads posts by URL or id, searches them, reads quotes, mentions, conversations and threads (`method`) | no     |
 
-One tool; `method` picks the read: `view`, `search`, `quotes` or `mentions`.
+One tool; `method` picks the read: `view`, `search`, `quotes`, `mentions`,
+`conversation` or `thread`.
 Each method takes only its own arguments; one it does not take, or lacks, fails
 as `invalid_argument` and names it.
 
@@ -63,26 +64,54 @@ a day, `YYYY-MM-DD`, from which on to read; left out there is no lower bound.
 It is the search `@<handle> -from:<handle> since:<day>` (the result's `query`),
 so it misses what X's search misses.
 
+## Conversation and thread
+
+Both take `post`, a post id or a post URL, as in `view`, and both report the
+post's `status` and `reason` like a `view` item (see below), `source`, and the
+`note`. When the status is not `ok`, `post` is `null` and `ancestors` and
+`results` are empty.
+
+`{"method":"conversation","post":"…"}` reads the discussion around one post:
+`post` (the post itself), `ancestors` (the posts it replies to, the root first;
+only on the first page, a continuing page may hold none) and `results`, a page
+of its direct replies, with a `cursor` for the next page. `sort` is `top` (the
+default, most liked replies first) or `latest` (newest first). Replies to the
+replies are not included: read the conversation of a reply to go deeper. The
+source sets the size of a page, so it takes no `limit`; follow `cursor` until it
+is `null`. A continuing page read through the reading account may leave `post`
+`null`: keep the one from the first page.
+
+`{"method":"thread","post":"…"}` reads the chain of posts the author of `post`
+wrote, oldest first, in `results`, whole in one call (no `limit`, no `cursor`;
+`cursor` is `null`). It holds the author's own posts only, not what others
+answered.
+
+Which to use: `thread` for what one person wrote as a series ("read this
+thread"); `conversation` for the replies other people made, or to see what a
+post answers.
+
 ## Pages
 
-`search`, `quotes` and `mentions` return a page: `results` (posts, in the
-source's order), `source`, and `cursor`.
+`search`, `quotes`, `mentions` and `conversation` return a page: `results`
+(posts, in the source's order), `source`, and `cursor`.
 
-- `limit` (1 to 50, 20 by default) is an upper bound. A page is one request to
-  its source, and X ends most pages near 20 posts whatever is asked, so a page
-  may hold fewer than `limit` with more to come: follow `cursor`, not the count.
+- `limit` (1 to 50, 20 by default; not for `conversation`) is an upper bound. A
+  page is one request to its source, and X ends most pages near 20 posts
+  whatever is asked, so a page may hold fewer than `limit` with more to come:
+  follow `cursor`, not the count.
 - To continue, pass the `cursor` of the last page with the same `method` and
-  the same arguments (`query` and `feed`, `post`, or `handle` and `since`); a
-  `null` cursor is the end. A cursor continues only on the source that gave it:
-  asking for another source, other arguments or another method fails as
-  `invalid_argument` before anything is read. `limit` and `account` may change
-  between pages; `source` must stay as it was, or be `auto`.
+  the same arguments (`query` and `feed`, `post` (and `sort`), or `handle` and
+  `since`); a `null` cursor is the end. A cursor continues only on the source
+  that gave it: asking for another source, other arguments or another method
+  fails as `invalid_argument` before anything is read. `limit` and `account` may
+  change between pages; `source` must stay as it was, or be `auto`.
 - Through the reading account a page counts as one read against its caps, so
   read the pages the person needs and stop. A call has about 150 seconds.
 
 ## What each status means
 
-(`view` only.)
+(`view` items, and the `status` of `conversation` and `thread`, which have no
+`not_read`: a failure there fails the call.)
 
 - `ok`: `post` holds the author (`handle`, `name`, `id`), the text, `created_at`,
   `lang`, `media`, `links`, `counts` (a count the source did not give is
