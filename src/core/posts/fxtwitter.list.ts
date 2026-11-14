@@ -24,10 +24,13 @@ export type FxListAsk = {
   now: () => number
 }
 
-/** The body of a list: its rows, and the cursors that continue it; a cursor of another shape ends the list. */
+/** The cursors of a reply that pages; a cursor of another shape ends the paging. */
+export const cursorFieldSchema = z.object({ bottom: z.string().nullish() }).nullish().catch(null)
+
+/** The body of a list: its rows, and the cursors that continue it. */
 const listBodySchema = z.object({
   results: z.array(z.unknown()),
-  cursor: z.object({ bottom: z.string().nullish() }).nullish().catch(null),
+  cursor: cursorFieldSchema,
 })
 
 /** What FxTwitter says when it refuses a request. */
@@ -40,8 +43,15 @@ function pagePath({ path, params }: FxListRoute, { limit, cursor }: FxListAsk): 
   return `${path}?${query}`
 }
 
-function isStatusRow(row: unknown): boolean {
+/** Whether `row` is a status; the other rows, such as tombstones, are skipped. */
+export function isStatusRow(row: unknown): boolean {
   return typeof row === "object" && row !== null && "type" in row && row.type === "status"
+}
+
+/** The cursor that continues a page of `rowCount` rows: `cursor.bottom`, null when the page has no rows or no usable bottom. */
+export function nextCursor(rowCount: number, cursor: z.infer<typeof cursorFieldSchema>): string | null {
+  const bottom = cursor?.bottom
+  return rowCount > 0 && bottom ? bottom : null
 }
 
 /** The page a `200` body holds: its statuses (other rows, such as tombstones, are skipped), at most `limit`, read as the reply arrived. */
@@ -54,8 +64,7 @@ function pageOf(body: unknown, { limit, now }: FxListAsk): Page<Post> {
     .filter(isStatusRow)
     .slice(0, limit)
     .map((row) => fxPost(row, readAt))
-  const bottom = cursor?.bottom
-  return { items, cursor: results.length > 0 && bottom ? bottom : null }
+  return { items, cursor: nextCursor(results.length, cursor) }
 }
 
 /** The error of a query FxTwitter refuses, with its words clipped; it names no source, since X would refuse the query too. */

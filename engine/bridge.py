@@ -19,6 +19,7 @@ import functools
 import hashlib
 import importlib
 import importlib.metadata
+import itertools
 import json
 import math
 import re
@@ -55,6 +56,58 @@ MAX_COUNT = 50
 MAX_CURSOR_LENGTH = 2000
 SEARCH_QUERY_SOURCE = "typed_query"
 SEARCH_TOGGLES = {"withArticleRichContentState": False}
+BOTTOM_CURSOR = "Bottom"
+SHOW_MORE_THREADS_CURSOR = "ShowMoreThreads"
+# The arguments of `conversation` and `thread`.
+CONVERSATION_ARGS = frozenset({"id", "ranking", "cursor"})
+CONVERSATION_RANKINGS = ("Likes", "Recency")
+THREAD_ARGS = frozenset({"id"})
+# The variables of a TweetDetail request that its two readings (`conversation`, `thread`) have in common.
+DETAIL_VARIABLES = {
+    "includePromotedContent": True,
+    "withCommunity": True,
+    "withQuickPromoteEligibilityTweetFields": True,
+    "withBirdwatchNotes": True,
+    "withVoice": True,
+    "withV2Timeline": True,
+}
+# The `referrer` twscrape sends with each reading (`tweet_replies_raw`, `tweet_thread_raw`).
+CONVERSATION_REFERRER = "tweet"
+THREAD_REFERRER = "profile"
+# The features `tweet_thread_raw` of twscrape 0.21.0 sends beside its defaults (twscrape keeps them inside the function).
+THREAD_FEATURES = {
+    "rweb_video_screen_enabled": False,
+    "profile_label_improvements_pcf_label_in_post_enabled": True,
+    "rweb_tipjar_consumption_enabled": True,
+    "verified_phone_label_enabled": False,
+    "creator_subscriptions_tweet_preview_api_enabled": True,
+    "responsive_web_graphql_timeline_navigation_enabled": True,
+    "responsive_web_graphql_skip_user_profile_image_extensions_enabled": False,
+    "premium_content_api_read_enabled": False,
+    "communities_web_enable_tweet_community_results_fetch": True,
+    "c9s_tweet_anatomy_moderator_badge_enabled": True,
+    "responsive_web_grok_analyze_button_fetch_trends_enabled": False,
+    "responsive_web_grok_analyze_post_followups_enabled": True,
+    "responsive_web_jetfuel_frame": False,
+    "responsive_web_grok_share_attachment_enabled": True,
+    "articles_preview_enabled": True,
+    "responsive_web_edit_tweet_api_enabled": True,
+    "graphql_is_translatable_rweb_tweet_is_translatable_enabled": True,
+    "view_counts_everywhere_api_enabled": True,
+    "longform_notetweets_consumption_enabled": True,
+    "responsive_web_twitter_article_tweet_consumption_enabled": True,
+    "tweet_awards_web_tipping_enabled": False,
+    "responsive_web_grok_show_grok_translated_post": False,
+    "responsive_web_grok_analysis_button_from_backend": True,
+    "creator_subscriptions_quote_tweet_preview_enabled": False,
+    "freedom_of_speech_not_reach_fetch_enabled": True,
+    "standardized_nudges_misinfo": True,
+    "tweet_with_visibility_results_prefer_gql_limited_actions_policy_enabled": True,
+    "longform_notetweets_rich_text_read_enabled": True,
+    "longform_notetweets_inline_media_enabled": True,
+    "responsive_web_grok_image_annotation_enabled": True,
+    "responsive_web_enhance_cards_enabled": False,
+}
 # A timeline entry's id ends in the id of the post it holds: `tweet-<id>`, or `<prefix>-<id>` in a module.
 ENTRY_POST_ID = re.compile(r"-([0-9]+)$")
 # What twscrape's `AbortReqError` says once X has answered 404 to a request three times, which X does to a
@@ -316,6 +369,12 @@ async def read_post(api: Any, args: dict) -> dict | None:
     return post_of(tweet) if tweet is not None else None
 
 
+def check_cursor_arg(cursor: object) -> None:
+    """Raises `Failure("invalid_request")` unless `cursor` is None or a text of 1 to 2000 characters."""
+    if cursor is not None and (not isinstance(cursor, str) or not 1 <= len(cursor) <= MAX_CURSOR_LENGTH):
+        raise Failure("invalid_request", f"args.cursor is not null or a text of 1 to {MAX_CURSOR_LENGTH} characters")
+
+
 def check_search_args(args: dict) -> None:
     """Raises `Failure("invalid_request")` unless `args` holds exactly a query, a product, a count and a cursor.
 
@@ -330,8 +389,7 @@ def check_search_args(args: dict) -> None:
         raise Failure("invalid_request", f"args.product is not one of {', '.join(SEARCH_PRODUCTS)}")
     if not isinstance(count, int) or isinstance(count, bool) or not 1 <= count <= MAX_COUNT:
         raise Failure("invalid_request", f"args.count is not a whole number from 1 to {MAX_COUNT}")
-    if cursor is not None and (not isinstance(cursor, str) or not 1 <= len(cursor) <= MAX_CURSOR_LENGTH):
-        raise Failure("invalid_request", f"args.cursor is not null or a text of 1 to {MAX_CURSOR_LENGTH} characters")
+    check_cursor_arg(cursor)
 
 
 def in_timeline_order(api: Any, timeline: dict, tweets: list[Any]) -> list[Any]:
@@ -343,6 +401,20 @@ def in_timeline_order(api: Any, timeline: dict, tweets: list[Any]) -> list[Any]:
         if match and (tweet := by_id.pop(match.group(1), None)) is not None:
             ordered.append(tweet)
     return [*ordered, *by_id.values()]
+
+
+async def request_page(
+    api: Any, operation_id: str, variables: dict, ft: dict | None = None, toggles: dict | None = None
+) -> tuple[dict, list[Any]]:
+    """The timeline and tweets (in timeline order) of one `_gql_item` request; raises `NoAccountError` when none."""
+    rep = await api._gql_item(operation_id, variables, ft=ft, toggles=toggles)
+    if rep is None:
+        raise importlib.import_module(TWSCRAPE).NoAccountError(
+            f"No account available for queue {operation_id.split('/')[-1]}"
+        )
+    timeline = rep.json()
+    parse_tweets = importlib.import_module(f"{TWSCRAPE}.models").parse_tweets
+    return timeline, in_timeline_order(api, timeline, list(parse_tweets(rep)))
 
 
 @operation("search", check_args=check_search_args)
@@ -364,18 +436,145 @@ async def read_search(api: Any, args: dict) -> dict:
     if args["cursor"] is not None:
         variables["cursor"] = args["cursor"]
     try:
-        rep = await api._gql_item(operation_id, variables, toggles=SEARCH_TOGGLES)
+        timeline, tweets = await request_page(api, operation_id, variables, toggles=SEARCH_TOGGLES)
     except twscrape.AbortReqError as exc:
         if SEARCH_REFUSED_MARKER not in str(exc):
             raise
         raise Failure("search_refused", SEARCH_REFUSED_MESSAGE) from exc
-    if rep is None:
-        raise twscrape.NoAccountError(f"No account available for queue {operation_id.split('/')[-1]}")
-    timeline = rep.json()
-    parse_tweets = importlib.import_module(f"{TWSCRAPE}.models").parse_tweets
-    tweets = in_timeline_order(api, timeline, list(parse_tweets(rep)))[: args["count"]]
-    cursor = api._get_cursor(timeline, "Bottom") if tweets else None
+    tweets = tweets[: args["count"]]
+    cursor = api._get_cursor(timeline, BOTTOM_CURSOR) if tweets else None
     return {"posts": [post_of(tweet) for tweet in tweets], "cursor": cursor}
+
+
+def check_conversation_args(args: dict) -> None:
+    """Raises `Failure("invalid_request")` unless `args` holds exactly a post id, a ranking and a cursor.
+
+    The messages name the argument and never repeat its value.
+    """
+    if set(args) != CONVERSATION_ARGS:
+        raise Failure("invalid_request", "args does not hold exactly id, ranking and cursor")
+    check_post_args(args)
+    ranking = args["ranking"]
+    if not isinstance(ranking, str) or ranking not in CONVERSATION_RANKINGS:
+        raise Failure("invalid_request", f"args.ranking is not one of {', '.join(CONVERSATION_RANKINGS)}")
+    check_cursor_arg(args["cursor"])
+
+
+def check_thread_args(args: dict) -> None:
+    """Raises `Failure("invalid_request")` unless `args` holds exactly a post id."""
+    if set(args) != THREAD_ARGS:
+        raise Failure("invalid_request", "args does not hold exactly id")
+    check_post_args(args)
+
+
+def detail_variables(post_id: str, referrer: str, with_rux_injections: bool) -> dict:
+    """The variables of a TweetDetail request for the post `post_id`, as twscrape's readings of it send them."""
+    return {
+        "focalTweetId": post_id,
+        "referrer": referrer,
+        "with_rux_injections": with_rux_injections,
+        **DETAIL_VARIABLES,
+    }
+
+
+async def read_detail_page(
+    api: Any, variables: dict, ft: dict | None = None, toggles: dict | None = None
+) -> tuple[dict, list[Any]]:
+    """The timeline of one TweetDetail request and its tweets in the order the timeline lists them.
+
+    A page is one request: twscrape's own readings page inside a generator.
+    """
+    operation_id = importlib.import_module(f"{TWSCRAPE}.api").OP_TweetDetail
+    return await request_page(api, operation_id, variables, ft=ft, toggles=toggles)
+
+
+def focal_of(tweets: list[Any], post_id: str) -> Any | None:
+    """The tweet of `tweets` that is the post `post_id`, or None."""
+    return next((tweet for tweet in tweets if tweet.id_str == post_id), None)
+
+
+def parents_of(tweet: Any, tweets: list[Any]) -> list[Any]:
+    """What `tweet` replies to, then what that replies to, and so on, as far as `tweets` holds it: nearest first."""
+    by_id = {other.id_str: other for other in tweets}
+    seen = {tweet.id_str}
+    parents = []
+    parent = by_id.get(tweet.inReplyToTweetIdStr)
+    while parent is not None and parent.id_str not in seen:
+        parents.append(parent)
+        seen.add(parent.id_str)
+        parent = by_id.get(parent.inReplyToTweetIdStr)
+    return parents
+
+
+def self_reply_to(tweet: Any, tweets: list[Any], used: set[str]) -> Any | None:
+    """The first of `tweets` by the author of `tweet` that replies to it and is not in `used`, or None."""
+    return next(
+        (
+            other
+            for other in tweets
+            if other.user.id_str == tweet.user.id_str
+            and other.inReplyToTweetIdStr == tweet.id_str
+            and other.id_str not in used
+        ),
+        None,
+    )
+
+
+@operation("conversation", check_args=check_conversation_args)
+async def read_conversation(api: Any, args: dict) -> dict | None:
+    """One page of the conversation of a post: `{"post", "ancestors", "replies", "cursor"}`, or None.
+
+    `post` is the post itself, `ancestors` what it answers (root first) as far as the page holds it, and `replies`
+    the direct replies in the order the timeline lists them. None when X gives no such post on a first page; on a
+    continuing page the post is absent as a rule and `post` is None. The cursor is the one X gives to read on, and
+    None once a page holds no reply.
+    """
+    api_module = importlib.import_module(f"{TWSCRAPE}.api")
+    variables = {
+        **detail_variables(args["id"], CONVERSATION_REFERRER, with_rux_injections=True),
+        "rankingMode": args["ranking"],
+    }
+    if args["cursor"] is not None:
+        variables["cursor"] = args["cursor"]
+    toggles = getattr(api_module, "ARTICLE_FIELD_TOGGLES", None)
+    timeline, tweets = await read_detail_page(api, variables, toggles=toggles)
+    focal = focal_of(tweets, args["id"])
+    if focal is None and args["cursor"] is None:
+        return None
+    replies = [tweet for tweet in tweets if tweet.inReplyToTweetIdStr == args["id"]]
+    cursor = (
+        (api._get_cursor(timeline, BOTTOM_CURSOR) or api._get_cursor(timeline, SHOW_MORE_THREADS_CURSOR))
+        if replies
+        else None
+    )
+    return {
+        "post": post_of(focal) if focal is not None else None,
+        "ancestors": [post_of(tweet) for tweet in reversed(parents_of(focal, tweets))] if focal is not None else [],
+        "replies": [post_of(tweet) for tweet in replies],
+        "cursor": cursor,
+    }
+
+
+@operation("thread", check_args=check_thread_args)
+async def read_thread(api: Any, args: dict) -> dict | None:
+    """The thread the author of a post wrote around it: `{"posts": [...]}`, oldest first, or None without the post.
+
+    It runs up the post's parents while the same author wrote them (as far as the page holds them) and down the
+    first reply by that author at each step, in the order the timeline lists them.
+    """
+    variables = detail_variables(args["id"], THREAD_REFERRER, with_rux_injections=False)
+    _, tweets = await read_detail_page(api, variables, ft=THREAD_FEATURES)
+    focal = focal_of(tweets, args["id"])
+    if focal is None:
+        return None
+    author = focal.user.id_str
+    own_parents = itertools.takewhile(lambda parent: parent.user.id_str == author, parents_of(focal, tweets))
+    thread = [*reversed(list(own_parents)), focal]
+    used = {tweet.id_str for tweet in thread}
+    while (follow_up := self_reply_to(thread[-1], tweets, used)) is not None:
+        thread.append(follow_up)
+        used.add(follow_up.id_str)
+    return {"posts": [post_of(tweet) for tweet in thread]}
 
 
 def failure_kind(exc: Exception, twscrape: Any) -> str:

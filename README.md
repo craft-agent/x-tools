@@ -190,17 +190,19 @@ person, it returns the one command to run.
 
 ### Posts (`posts`)
 
-On by default. Reads posts by URL or id, searches them, and reads who quoted
-and who mentioned.
+On by default. Reads posts by URL or id, searches them, reads who quoted and
+who mentioned, and reads a post's conversation and thread.
 
-| Tool          | What it does                                                                                                                                                                                                                                                                                                 | Class |
-| ------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ----- |
-| `x_post_read` | `view`: up to 50 posts by URL or id, each with its status, the source that answered it and the post itself. `search`: X's search syntax, in the `latest`, `top` or `media` feed. `quotes`: the posts quoting a post. `mentions`: the posts mentioning a handle, from a day on. Each of these three is a page | read  |
+| Tool          | What it does                                                                                                                                                                                                                                                                                                                                                                                                                                                                   | Class |
+| ------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ----- |
+| `x_post_read` | `view`: up to 50 posts by URL or id, each with its status, the source that answered it and the post itself. `search`: X's search syntax, in the `latest`, `top` or `media` feed. `quotes`: the posts quoting a post. `mentions`: the posts mentioning a handle, from a day on. Each of these three is a page. `conversation`: a post, the posts it replies to and a page of its direct replies, by likes or newest first. `thread`: the chain of posts its author wrote, whole | read  |
 
 `search`, `quotes` and `mentions` return a page of `results` with a `cursor` for
 the next one: `limit` (20 by default, 50 at most) is an upper bound, a page may
 hold fewer with more to come, and a cursor continues only the method, the
-arguments and the source that gave it. Through the reading account a page is
+arguments and the source that gave it. `conversation` pages its replies the same
+way, but the source sets the page size, so it takes no `limit`; a `thread` is
+given whole, with neither `limit` nor `cursor`. Through the reading account a page is
 one request to X and counts as one read; X refuses search to a reading account
 whose phone is not verified, which fails as `forbidden` (`search_refused`),
 while FxTwitter still answers. `mentions` is the search
