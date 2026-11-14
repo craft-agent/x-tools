@@ -14,6 +14,12 @@ export const MAX_POSTS = 50
 /** The longest post reference (an id or a URL), in characters. */
 export const MAX_POST_REF_LENGTH = 300
 
+/** The feeds a `search` reads, `latest` by default. */
+export const FEEDS = ["latest", "top", "media"] as const
+
+/** One feed of a `search`. */
+export type Feed = (typeof FEEDS)[number]
+
 /** What a post came to, as `view` reports it: a lookup's outcome, or `not_read` for a post no source answered. */
 export const POST_STATUSES = ["ok", "not_found", "protected", "unavailable", "not_read"] as const
 
