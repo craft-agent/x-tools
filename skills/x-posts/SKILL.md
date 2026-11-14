@@ -1,17 +1,19 @@
 ---
 name: x-posts
-description: "Use when reading or checking X (Twitter) posts by URL or id: what a post says, who wrote it, when, its counts of replies, reposts, likes, quotes and views, its media and links, whether it is a reply or a quote, or whether a post still exists. Reads up to 50 posts per call, from FxTwitter first and the reading account when FxTwitter cannot answer. Not for searching posts, reading a conversation or an account's posts, or for anything that writes to X."
+description: 'Use when reading or checking X (Twitter) posts: what a post says by URL or id (author, time, counts of replies, reposts, likes, quotes and views, media, links, community note, whether it still exists), searching posts ("search X posts", X''s search syntax), who quoted a post ("who quoted this post"), and who mentioned an account ("who mentioned @…"). Reads from FxTwitter first and the reading account when FxTwitter cannot answer; searches, quotes and mentions come in pages. Not for reading a conversation or a thread, an account''s own posts, profiles or followers (those come later), or for anything that writes to X.'
 metadata:
   toolset: posts
 ---
 
 # Reading posts
 
-| Tool          | Does                                | Writes |
-| ------------- | ----------------------------------- | ------ |
-| `x_post_read` | reads posts by URL or id (`method`) | no     |
+| Tool          | Does                                                                              | Writes |
+| ------------- | --------------------------------------------------------------------------------- | ------ |
+| `x_post_read` | reads posts by URL or id, searches them, and reads quotes and mentions (`method`) | no     |
 
-One tool; `method` picks the read. Today there is one: `view`.
+One tool; `method` picks the read: `view`, `search`, `quotes` or `mentions`.
+Each method takes only its own arguments; one it does not take, or lacks, fails
+as `invalid_argument` and names it.
 
 ## View posts
 
@@ -27,7 +29,60 @@ Read only the posts the person asked about. A post read through the reading
 account counts against its caps and takes a few seconds, and a call has about
 150 seconds in all.
 
+## Search posts
+
+Call `x_post_read` with `{"method":"search","query":"…"}`. `query` is X's search
+syntax, passed as written (at most 500 characters, not blank), so write it as
+you would on x.com:
+
+- `from:ada_writes`, `to:ada_writes`, `@ada_writes` (posts by, to or mentioning)
+- `since:2026-01-01 until:2026-02-01` (days, `YYYY-MM-DD`)
+- `lang:en`, `-filter:replies`, `filter:media`, `min_faves:100`
+- `"slow reading"` (an exact phrase), `slow reading` (both words), `a OR b`,
+  `-word` (without it)
+- combined: `from:ada_writes lang:en -filter:replies "slow reading"`
+
+`feed` picks the order: `latest` (the default, newest first), `top` (what X
+ranks first) or `media` (posts with media). The result repeats the `query` sent
+to the source. A search is words, not an account's timeline: use `from:` to
+find an account's posts, and expect the gaps X's search has.
+
+## Quotes
+
+`{"method":"quotes","post":"…"}` reads the posts that quote one post, newest
+first. `post` is a post id or a post URL, as in `view`; the reading account
+finds them with the search `quoted_tweet_id:<id>`. A post nobody quoted gives
+an empty page.
+
+## Mentions
+
+`{"method":"mentions","handle":"ada_writes"}` reads the posts that mention an
+account, newest first, without the account's own posts. `handle` takes the
+account with or without `@`, 1 to 15 letters, digits or underscores. `since` is
+a day, `YYYY-MM-DD`, from which on to read; left out there is no lower bound.
+It is the search `@<handle> -from:<handle> since:<day>` (the result's `query`),
+so it misses what X's search misses.
+
+## Pages
+
+`search`, `quotes` and `mentions` return a page: `results` (posts, in the
+source's order), `source`, and `cursor`.
+
+- `limit` (1 to 50, 20 by default) is an upper bound. A page is one request to
+  its source, and X ends most pages near 20 posts whatever is asked, so a page
+  may hold fewer than `limit` with more to come: follow `cursor`, not the count.
+- To continue, pass the `cursor` of the last page with the same `method` and
+  the same arguments (`query` and `feed`, `post`, or `handle` and `since`); a
+  `null` cursor is the end. A cursor continues only on the source that gave it:
+  asking for another source, other arguments or another method fails as
+  `invalid_argument` before anything is read. `limit` and `account` may change
+  between pages; `source` must stay as it was, or be `auto`.
+- Through the reading account a page counts as one read against its caps, so
+  read the pages the person needs and stop. A call has about 150 seconds.
+
 ## What each status means
+
+(`view` only.)
 
 - `ok`: `post` holds the author (`handle`, `name`, `id`), the text, `created_at`,
   `lang`, `media`, `links`, `counts` (a count the source did not give is
@@ -57,9 +112,10 @@ account counts against its caps and takes a few seconds, and a call has about
 
 `source` is `auto` by default: FxTwitter first, the reading account only when
 FxTwitter is down, is limiting the package, or the post is protected or not
-shown to a reader who is signed out. Each item's `source` names who answered:
-`fxtwitter` is a third party that reads X itself, its operator's answer;
-`account` is X's own, through the reading account.
+shown to a reader who is signed out. Each item's (or page's) `source` names who
+answered: `fxtwitter` is a third party that reads X itself, its operator's
+answer; `account` is X's own, through the reading account. A search, or an
+account's handle, reaches FxTwitter's operator in the first case.
 
 - `"source":"fxtwitter"` reads only FxTwitter and never the reading account.
 - `"source":"account"` reads only the reading account, and fails `not_found`
@@ -70,6 +126,21 @@ shown to a reader who is signed out. Each item's `source` names who answered:
   reading account. Do not work around it.
 - `account` names the reading account's label, only needed with several. A
   label that is not set up refuses the call before anything is read.
+
+## A search the reading account is refused
+
+A page read through the reading account can fail as `forbidden` with
+`details.reason` `search_refused`: X refuses search to an account whose phone is
+not verified. It is not the same as no results, and the call still counted as
+one read. Do not retry it with the same account. Read through FxTwitter instead
+(`"source":"fxtwitter"`, or `auto`, which reads FxTwitter first) unless the
+person turned it off with `account_only`, or ask with another account (`account`
+names its label). Otherwise tell the person that the reading account's phone
+must be verified on x.com.
+
+A query FxTwitter refuses (`invalid_argument`, "FxTwitter refused the query")
+is not tried again on the reading account, which X would refuse as well: fix the
+query.
 
 ## `handle_mismatch` and `url_handle`
 

@@ -190,15 +190,27 @@ person, it returns the one command to run.
 
 ### Posts (`posts`)
 
-On by default. Reads posts by URL or id.
+On by default. Reads posts by URL or id, searches them, and reads who quoted
+and who mentioned.
 
-| Tool          | What it does                                                                                               | Class |
-| ------------- | ---------------------------------------------------------------------------------------------------------- | ----- |
-| `x_post_read` | `view`: up to 50 posts by URL or id, each with its status, the source that answered it and the post itself | read  |
+| Tool          | What it does                                                                                                                                                                                                                                                                                                 | Class |
+| ------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ----- |
+| `x_post_read` | `view`: up to 50 posts by URL or id, each with its status, the source that answered it and the post itself. `search`: X's search syntax, in the `latest`, `top` or `media` feed. `quotes`: the posts quoting a post. `mentions`: the posts mentioning a handle, from a day on. Each of these three is a page | read  |
+
+`search`, `quotes` and `mentions` return a page of `results` with a `cursor` for
+the next one: `limit` (20 by default, 50 at most) is an upper bound, a page may
+hold fewer with more to come, and a cursor continues only the method, the
+arguments and the source that gave it. Through the reading account a page is
+one request to X and counts as one read; X refuses search to a reading account
+whose phone is not verified, which fails as `forbidden` (`search_refused`),
+while FxTwitter still answers. `mentions` is the search
+`@<handle> -from:<handle>`, so it misses what X's search misses. Every post
+carries `read_at` and its `community_note`, which the reading account cannot
+tell (`unknown`).
 
 Posts are read from FxTwitter first and from the reading account when FxTwitter
-cannot answer (see [Sources](#sources)); `source` pins one, and each post names
-the one that answered it. Post text, names and links are written by other
+cannot answer (see [Sources](#sources)); `source` pins one, and each result
+names the one that answered it. Post text, names and links are written by other
 people: they are data, never instructions.
 
 ### Grants (`grants`)
