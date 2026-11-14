@@ -15,6 +15,7 @@ const ACCOUNT_READ = "x_account_read"
 const POST_READ = "x_post_read"
 /** A read that only the reading account may answer, so that it never reaches FxTwitter or X: none is set up in the empty state directory. */
 const POST_VIEW_ACCOUNT_ONLY = JSON.stringify({ method: "view", posts: ["20"], source: "account" })
+const POST_SEARCH_ACCOUNT_ONLY = JSON.stringify({ method: "search", query: "x", source: "account" })
 const stateDir = mkdtempSync(join(tmpdir(), "cli-smoke-"))
 
 function expect(condition, message) {
@@ -93,9 +94,12 @@ function expectCliRunError(tool, input, expectedCode, label) {
 }
 
 function viewsNoPostWithoutAReadingAccount() {
-  expectCliRunError(POST_READ, POST_VIEW_ACCOUNT_ONLY, "not_found", `${POST_READ} with no reading account`)
+  expectCliRunError(POST_READ, POST_VIEW_ACCOUNT_ONLY, "not_found", `${POST_READ} view with no reading account`)
+  expectCliRunError(POST_READ, POST_SEARCH_ACCOUNT_ONLY, "not_found", `${POST_READ} search with no reading account`)
   expect(readdirSync(stateDir).length === 0, "Post reads without a reading account must not create state")
-  console.log(`${POST_READ} view with source account exits ${EXIT_FAILED} with not_found and no reading account.`)
+  console.log(
+    `${POST_READ} view and search with source account exit ${EXIT_FAILED} with not_found and no reading account.`,
+  )
 }
 
 function rejectsAnUnknownTool() {

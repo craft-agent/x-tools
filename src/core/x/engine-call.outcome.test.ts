@@ -100,6 +100,15 @@ describe("engineOutcome", () => {
     expect(parseError.message).toBe("X's answer could not be read: no data.")
   })
 
+  test("search_refused is forbidden with its reason, and says what X refuses", () => {
+    const error = outcome(failure("search_refused"))
+    expect(error.code).toBe("forbidden")
+    expect(error.message).toBe(
+      "X refused this reading account a search: X refuses search to an account whose phone is not verified.",
+    )
+    expect(error.details).toEqual({ reason: "search_refused", kind: "search_refused", contacted: true })
+  })
+
   test("invalid_request is internal_error, and error is upstream_error", () => {
     expect(outcome(failure("invalid_request", { contacted: false })).code).toBe("internal_error")
     expect(outcome(failure("error", { error: "oops" })).code).toBe("upstream_error")
@@ -114,6 +123,7 @@ describe("engineOutcome", () => {
       "timeout",
       "x_error",
       "parse_error",
+      "search_refused",
       "error",
     ]
     for (const kind of kinds) {

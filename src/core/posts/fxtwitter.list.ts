@@ -1,0 +1,105 @@
+import { z } from "zod"
+import { ToolError } from "../errors"
+import type { FxClient } from "../fxtwitter/client"
+import type { FxOutcome } from "../sources/choose"
+import type { Page } from "../sources/page"
+import { HTTP_NOT_FOUND, HTTP_OK, fxPost } from "./fxtwitter"
+import { clipCodePoints, readAtOf, unexpectedReplyError, type Post } from "./shape"
+
+const HTTP_BAD_REQUEST = 400
+
+/** The most characters of FxTwitter's own words a refusal repeats. */
+const MAX_REFUSAL_TEXT = 200
+
+/** Where FxTwitter reads a list: a path of its v2 API, and the query-string fields that decide what it holds. */
+export type FxListRoute = { path: string; params: Readonly<Record<string, string>> }
+
+/** What a page of a list asks of FxTwitter. */
+export type FxListAsk = {
+  /** Sent as `count`, and the most posts the page keeps. */
+  limit: number
+  /** FxTwitter's own cursor, sent as `cursor` when it continues a page. */
+  cursor: string | null
+  /** The clock in epoch milliseconds that stamps `read_at`. */
+  now: () => number
+}
+
+/** The body of a list: its rows, and the cursors that continue it; a cursor of another shape ends the list. */
+const listBodySchema = z.object({
+  results: z.array(z.unknown()),
+  cursor: z.object({ bottom: z.string().nullish() }).nullish().catch(null),
+})
+
+/** What FxTwitter says when it refuses a request. */
+const refusalSchema = z.object({ message: z.string().nullish(), error: z.string().nullish() })
+
+/** The path and query string of one page: the route's fields, then `count`, then `cursor` when continuing. */
+function pagePath({ path, params }: FxListRoute, { limit, cursor }: FxListAsk): string {
+  const query = new URLSearchParams({ ...params, count: String(limit) })
+  if (cursor !== null) query.set("cursor", cursor)
+  return `${path}?${query}`
+}
+
+function isStatusRow(row: unknown): boolean {
+  return typeof row === "object" && row !== null && "type" in row && row.type === "status"
+}
+
+/** The page a `200` body holds: its statuses (other rows, such as tombstones, are skipped), at most `limit`, read as the reply arrived. */
+function pageOf(body: unknown, { limit, now }: FxListAsk): Page<Post> {
+  const parsed = listBodySchema.safeParse(body)
+  if (!parsed.success) throw unexpectedReplyError("fxtwitter", { status: HTTP_OK })
+  const { results, cursor } = parsed.data
+  const readAt = readAtOf(now())
+  const items = results
+    .filter(isStatusRow)
+    .slice(0, limit)
+    .map((row) => fxPost(row, readAt))
+  const bottom = cursor?.bottom
+  return { items, cursor: results.length > 0 && bottom ? bottom : null }
+}
+
+/** The error of a query FxTwitter refuses, with its words clipped; it names no source, since X would refuse the query too. */
+function refusedQueryError(body: unknown): ToolError {
+  const refusal = refusalSchema.safeParse(body)
+  const said = refusal.success ? (refusal.data.message || refusal.data.error || "").trim().replace(/\.$/, "") : ""
+  const text = clipCodePoints(said, MAX_REFUSAL_TEXT)
+  return new ToolError(
+    "invalid_argument",
+    text ? `FxTwitter refused the query: ${text}.` : "FxTwitter refused the query.",
+  )
+}
+
+/**
+ * Reads one page of a list of posts of FxTwitter (`GET` of the route's path
+ * with its fields, `count` and, when continuing, `cursor`):
+ *
+ * - `200` with `results`: an `answer`, the rows of `type: "status"` as posts
+ *   (the others are skipped) and `cursor.bottom` as the next cursor, null
+ *   when the page has no rows.
+ * - `404`: an `answer`, an empty page with no cursor, FxTwitter's way to say
+ *   there is nothing.
+ * - `400`: `invalid_argument` with FxTwitter's words clipped. It does not name
+ *   FxTwitter as the source, so `auto` does not take it to the reading
+ *   account, which X would refuse it too.
+ * - Anything else, a body off shape included: `upstream_error` with
+ *   `details.reason` `unexpected_reply`.
+ *
+ * What the client throws (a 429, a 5xx, a failed request) propagates.
+ */
+export async function readListFromFxTwitter(
+  client: FxClient,
+  route: FxListRoute,
+  ask: FxListAsk,
+): Promise<FxOutcome<Page<Post>>> {
+  const { status, body } = await client.get(pagePath(route, ask))
+  switch (status) {
+    case HTTP_OK:
+      return { kind: "answer", value: pageOf(body, ask) }
+    case HTTP_NOT_FOUND:
+      return { kind: "answer", value: { items: [], cursor: null } }
+    case HTTP_BAD_REQUEST:
+      throw refusedQueryError(body)
+    default:
+      throw unexpectedReplyError("fxtwitter", { status })
+  }
+}

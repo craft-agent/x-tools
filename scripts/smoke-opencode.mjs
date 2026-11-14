@@ -12,6 +12,7 @@ const ACCOUNT_READ = "x_account_read"
 const POST_READ = "x_post_read"
 /** A read that only the reading account may answer, so that it never reaches FxTwitter or X: none is set up in the empty state directory. */
 const POST_VIEW_ACCOUNT_ONLY = { method: "view", posts: ["20"], source: "account" }
+const POST_SEARCH_ACCOUNT_ONLY = { method: "search", query: "x", source: "account" }
 const NO_ACCOUNT_ERROR = /^not_found: No reading account is set up yet\./
 const stateDir = mkdtempSync(join(tmpdir(), "opencode-smoke-"))
 
@@ -39,10 +40,11 @@ async function expectNoAccountError(run, label) {
   )
 }
 
-/** Expects `version` to read no accounts from `ACCOUNT_READ` and fail `POST_READ` with `not_found`. */
+/** Expects `version` to read no accounts from `ACCOUNT_READ` and fail `POST_READ` with `not_found`, for a view and for a search. */
 async function checkOpenCodeVersion(version, readAccount, runPost) {
   expectEmptyAccounts(await readAccount(), `${version} ${ACCOUNT_READ}`)
-  await expectNoAccountError(runPost, `${version} ${POST_READ}`)
+  await expectNoAccountError(() => runPost(POST_VIEW_ACCOUNT_ONLY), `${version} ${POST_READ} view`)
+  await expectNoAccountError(() => runPost(POST_SEARCH_ACCOUNT_ONLY), `${version} ${POST_READ} search`)
 }
 
 /** The tool names the MCP server lists with default settings; it draws on the same registry as the plugin. */
@@ -97,7 +99,7 @@ try {
   await checkOpenCodeVersion(
     "V2",
     async () => (await added.get(ACCOUNT_READ).execute({}, v2Ctx)).output,
-    () => added.get(POST_READ).execute(POST_VIEW_ACCOUNT_ONLY, v2Ctx),
+    (args) => added.get(POST_READ).execute(args, v2Ctx),
   )
 
   const { tool } = await plugin.server({}, options)
@@ -110,7 +112,7 @@ try {
   await checkOpenCodeVersion(
     "V1",
     async () => JSON.parse(await tool[ACCOUNT_READ].execute({}, v1Ctx)),
-    () => tool[POST_READ].execute(POST_VIEW_ACCOUNT_ONLY, v1Ctx),
+    (args) => tool[POST_READ].execute(args, v1Ctx),
   )
   expect(readdirSync(stateDir).length === 0, "Account and post reads must not create state.")
   console.log(`server returns ${served.length} tools; V1 and V2 read no accounts from an empty state directory.`)

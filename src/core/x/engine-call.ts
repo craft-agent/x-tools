@@ -21,6 +21,7 @@ const FAILURE_KINDS = [
   "timeout",
   "x_error",
   "parse_error",
+  "search_refused",
   "error",
 ] as const
 
@@ -232,6 +233,12 @@ function failureOf(reply: EngineFailure, now: number): Mapped {
       return ["upstream_error", `X answered with an error: ${sentence(reply.error)}.`, {}]
     case "parse_error":
       return ["upstream_error", `X's answer could not be read: ${sentence(reply.error)}.`, {}]
+    case "search_refused":
+      return [
+        "forbidden",
+        "X refused this reading account a search: X refuses search to an account whose phone is not verified.",
+        { reason: "search_refused" },
+      ]
     case "invalid_request":
       return ["internal_error", `The engine rejected the request: ${sentence(reply.error)}.`, {}]
     case "error":
@@ -244,7 +251,9 @@ function failureOf(reply: EngineFailure, now: number): Mapped {
  * `setup` and `refused` are `unauthenticated`; `no_account` is `rate_limited`
  * while a session lock lies after `now` (with `details.until`),
  * `unauthenticated` for a session twscrape marked inactive, else
- * `upstream_error`; `timeout`, `x_error`, `parse_error` and `error` are
+ * `upstream_error`; `search_refused`, a search X refuses to an account whose
+ * phone is not verified, is `forbidden` with `details.reason`
+ * `search_refused`; `timeout`, `x_error`, `parse_error` and `error` are
  * `upstream_error`; `invalid_request` is `internal_error`. Every failure's
  * details carry the reply's `kind` and `contacted`, and no message holds the
  * cookies, which the bridge masked out of `error`.

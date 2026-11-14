@@ -47,6 +47,22 @@ PARSE_ERRORS = ("ParseError",)
 POST_ID = re.compile(r"[0-9]{1,20}")
 VIDEO_MP4 = "video/mp4"
 MILLISECONDS = 1000
+# The arguments of `search`, and what each may hold.
+SEARCH_ARGS = frozenset({"query", "product", "count", "cursor"})
+SEARCH_PRODUCTS = ("Latest", "Top", "Media")
+MAX_QUERY_LENGTH = 600
+MAX_COUNT = 50
+MAX_CURSOR_LENGTH = 2000
+SEARCH_QUERY_SOURCE = "typed_query"
+SEARCH_TOGGLES = {"withArticleRichContentState": False}
+# A timeline entry's id ends in the id of the post it holds: `tweet-<id>`, or `<prefix>-<id>` in a module.
+ENTRY_POST_ID = re.compile(r"-([0-9]+)$")
+# What twscrape's `AbortReqError` says once X has answered 404 to a request three times, which X does to a
+# search by an account whose phone is not verified (twscrape issue 367).
+SEARCH_REFUSED_MARKER = "XClIdGen"
+SEARCH_REFUSED_MESSAGE = (
+    "X refused the search: X answers 404 to a search by an account whose phone is not verified"
+)
 
 Operation = Callable[[Any, dict], Awaitable[Any]]
 ArgumentCheck = Callable[[dict], None]
@@ -300,6 +316,68 @@ async def read_post(api: Any, args: dict) -> dict | None:
     return post_of(tweet) if tweet is not None else None
 
 
+def check_search_args(args: dict) -> None:
+    """Raises `Failure("invalid_request")` unless `args` holds exactly a query, a product, a count and a cursor.
+
+    The messages name the argument and never repeat its value.
+    """
+    if set(args) != SEARCH_ARGS:
+        raise Failure("invalid_request", "args does not hold exactly query, product, count and cursor")
+    query, product, count, cursor = args["query"], args["product"], args["count"], args["cursor"]
+    if not isinstance(query, str) or not query.strip() or len(query) > MAX_QUERY_LENGTH:
+        raise Failure("invalid_request", f"args.query is not a text of 1 to {MAX_QUERY_LENGTH} characters")
+    if not isinstance(product, str) or product not in SEARCH_PRODUCTS:
+        raise Failure("invalid_request", f"args.product is not one of {', '.join(SEARCH_PRODUCTS)}")
+    if not isinstance(count, int) or isinstance(count, bool) or not 1 <= count <= MAX_COUNT:
+        raise Failure("invalid_request", f"args.count is not a whole number from 1 to {MAX_COUNT}")
+    if cursor is not None and (not isinstance(cursor, str) or not 1 <= len(cursor) <= MAX_CURSOR_LENGTH):
+        raise Failure("invalid_request", f"args.cursor is not null or a text of 1 to {MAX_CURSOR_LENGTH} characters")
+
+
+def in_timeline_order(api: Any, timeline: dict, tweets: list[Any]) -> list[Any]:
+    """`tweets` as the timeline lists them: by the id each entry ends in, then the rest in their own order."""
+    by_id = {tweet.id_str: tweet for tweet in tweets}
+    ordered = []
+    for entry in api._gql_entries(timeline):
+        match = ENTRY_POST_ID.search(str(entry.get("entryId"))) if isinstance(entry, dict) else None
+        if match and (tweet := by_id.pop(match.group(1), None)) is not None:
+            ordered.append(tweet)
+    return [*ordered, *by_id.values()]
+
+
+@operation("search", check_args=check_search_args)
+async def read_search(api: Any, args: dict) -> dict:
+    """One page of X's search: `{"posts": [...], "cursor": str | None}`, in the order the timeline lists them.
+
+    twscrape's own `search` pages inside a generator and asks X again for a page without items, so the one request
+    is made here: a page is one read. An empty page has no cursor, since X keeps giving one past the end. Raises
+    `Failure("search_refused")` when X answers 404 to the search, which it does for an account without a verified phone.
+    """
+    twscrape = importlib.import_module(TWSCRAPE)
+    operation_id = importlib.import_module(f"{TWSCRAPE}.api").OP_SearchTimeline
+    variables = {
+        "rawQuery": args["query"],
+        "count": args["count"],
+        "product": args["product"],
+        "querySource": SEARCH_QUERY_SOURCE,
+    }
+    if args["cursor"] is not None:
+        variables["cursor"] = args["cursor"]
+    try:
+        rep = await api._gql_item(operation_id, variables, toggles=SEARCH_TOGGLES)
+    except twscrape.AbortReqError as exc:
+        if SEARCH_REFUSED_MARKER not in str(exc):
+            raise
+        raise Failure("search_refused", SEARCH_REFUSED_MESSAGE) from exc
+    if rep is None:
+        raise twscrape.NoAccountError(f"No account available for queue {operation_id.split('/')[-1]}")
+    timeline = rep.json()
+    parse_tweets = importlib.import_module(f"{TWSCRAPE}.models").parse_tweets
+    tweets = in_timeline_order(api, timeline, list(parse_tweets(rep)))[: args["count"]]
+    cursor = api._get_cursor(timeline, "Bottom") if tweets else None
+    return {"posts": [post_of(tweet) for tweet in tweets], "cursor": cursor}
+
+
 def failure_kind(exc: Exception, twscrape: Any) -> str:
     """The reply kind of an exception an operation raised."""
     if isinstance(exc, twscrape.NoAccountError):
@@ -324,7 +402,8 @@ def failure_of(exc: Exception, twscrape: Any, deadline: float) -> Failure:
 async def contact(reply: dict, operate: Operation, args: dict, cookies: dict[str, str], deadline: float) -> Any:
     """Runs `operate` against X with the session in an in-memory pool; fills `contacted` and `session` of `reply`.
 
-    Raises `Failure` for what twscrape or X answered, after the session report is in `reply`.
+    Raises `Failure` for what twscrape or X answered, after the session report is in `reply`; a `Failure` the
+    operation raised itself (`search_refused`) is kept as it is.
     """
     twscrape = importlib.import_module(TWSCRAPE)
     capture_warnings(importlib.import_module(f"{TWSCRAPE}.logger").logger)
@@ -338,6 +417,8 @@ async def contact(reply: dict, operate: Operation, args: dict, cookies: dict[str
             data = await asyncio.wait_for(operate(api, args), timeout=deadline)
         except Exception as exc:
             reply["session"] = await session_report(api)
+            if isinstance(exc, Failure):
+                raise
             raise failure_of(exc, twscrape, deadline) from exc
         reply["session"] = await session_report(api)
         return data
