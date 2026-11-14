@@ -66,6 +66,7 @@ class OptionFlagsTest(unittest.TestCase):
                 "fxtwitter_gap_ms",
                 "fxtwitter_reads_per_day",
                 "fxtwitter_cooldown_seconds",
+                "account_only",
             ],
         )
 
