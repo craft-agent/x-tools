@@ -10,12 +10,25 @@ const PLUGIN = fileURLToPath(new URL("../dist/opencode.js", import.meta.url))
 const SERVER = fileURLToPath(new URL("../dist/mcp.js", import.meta.url))
 const ACCOUNT_READ = "x_account_read"
 const POST_READ = "x_post_read"
-/** Reads that only the reading account may answer, so they never reach FxTwitter or X: none is set up in the empty state directory. */
-const POST_ACCOUNT_ONLY_READS = [
-  { method: "view", posts: ["20"], source: "account" },
-  { method: "search", query: "x", source: "account" },
-  { method: "conversation", post: "20", source: "account" },
-  { method: "timeline", handle: "x", source: "account" },
+const USER_READ = "x_user_read"
+/** The reads of each tool that only the reading account may answer, so they never reach FxTwitter or X: none is set up in the empty state directory. */
+const ACCOUNT_ONLY_READS = [
+  [
+    POST_READ,
+    [
+      { method: "view", posts: ["20"], source: "account" },
+      { method: "search", query: "x", source: "account" },
+      { method: "conversation", post: "20", source: "account" },
+      { method: "timeline", handle: "x", source: "account" },
+    ],
+  ],
+  [
+    USER_READ,
+    [
+      { method: "view", handle: "x", source: "account" },
+      { method: "search", query: "x", source: "account" },
+    ],
+  ],
 ]
 const NO_ACCOUNT_ERROR = /^not_found: No reading account is set up yet\./
 const stateDir = mkdtempSync(join(tmpdir(), "opencode-smoke-"))
@@ -44,11 +57,13 @@ async function expectNoAccountError(run, label) {
   )
 }
 
-/** Expects `version` to read no accounts from `ACCOUNT_READ` and fail `POST_READ` with `not_found`, for a view, a search, a conversation and a timeline. */
-async function checkOpenCodeVersion(version, readAccount, runPost) {
+/** Expects `version` to read no accounts from `ACCOUNT_READ` and fail every read of `ACCOUNT_ONLY_READS` with `not_found`; `runTool(tool, args)` runs one. */
+async function checkOpenCodeVersion(version, readAccount, runTool) {
   expectEmptyAccounts(await readAccount(), `${version} ${ACCOUNT_READ}`)
-  for (const args of POST_ACCOUNT_ONLY_READS) {
-    await expectNoAccountError(() => runPost(args), `${version} ${POST_READ} ${args.method}`)
+  for (const [tool, reads] of ACCOUNT_ONLY_READS) {
+    for (const args of reads) {
+      await expectNoAccountError(() => runTool(tool, args), `${version} ${tool} ${args.method}`)
+    }
   }
 }
 
@@ -73,7 +88,7 @@ try {
   console.log(`The OpenCode plugin ${plugin.id} exports setup and server.`)
 
   const expected = await mcpToolNames()
-  for (const name of [ACCOUNT_READ, POST_READ]) {
+  for (const name of [ACCOUNT_READ, POST_READ, USER_READ]) {
     expect(expected.includes(name), `Expected the MCP registry to include ${name}.`)
   }
 
@@ -96,7 +111,7 @@ try {
     JSON.stringify(registered) === JSON.stringify(expected),
     `Expected setup to register ${JSON.stringify(expected)}, got ${JSON.stringify(registered)}.`,
   )
-  for (const id of ["x-account", "x-posts"]) {
+  for (const id of ["x-account", "x-posts", "x-users"]) {
     expect(skills.includes(id), `Expected setup to register ${id}, got ${JSON.stringify(skills)}.`)
   }
   console.log(`setup registers ${added.size} tools (as many as the MCP server lists) and ${skills.length} skills.`)
@@ -104,7 +119,7 @@ try {
   await checkOpenCodeVersion(
     "V2",
     async () => (await added.get(ACCOUNT_READ).execute({}, v2Ctx)).output,
-    (args) => added.get(POST_READ).execute(args, v2Ctx),
+    (tool, args) => added.get(tool).execute(args, v2Ctx),
   )
 
   const { tool } = await plugin.server({}, options)
@@ -117,7 +132,7 @@ try {
   await checkOpenCodeVersion(
     "V1",
     async () => JSON.parse(await tool[ACCOUNT_READ].execute({}, v1Ctx)),
-    (args) => tool[POST_READ].execute(args, v1Ctx),
+    (name, args) => tool[name].execute(args, v1Ctx),
   )
   expect(readdirSync(stateDir).length === 0, "Account and post reads must not create state.")
   console.log(`server returns ${served.length} tools; V1 and V2 read no accounts from an empty state directory.`)

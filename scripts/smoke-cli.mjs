@@ -13,12 +13,25 @@ const EXIT_USAGE = 2
 const UNKNOWN_TOOL = "unknown_nonexistent_read"
 const ACCOUNT_READ = "x_account_read"
 const POST_READ = "x_post_read"
-/** Reads that only the reading account may answer, so they never reach FxTwitter or X: none is set up in the empty state directory. */
-const POST_ACCOUNT_ONLY_READS = [
-  { method: "view", posts: ["20"], source: "account" },
-  { method: "search", query: "x", source: "account" },
-  { method: "conversation", post: "20", source: "account" },
-  { method: "timeline", handle: "x", source: "account" },
+const USER_READ = "x_user_read"
+/** The reads of each tool that only the reading account may answer, so they never reach FxTwitter or X: none is set up in the empty state directory. */
+const ACCOUNT_ONLY_READS = [
+  [
+    POST_READ,
+    [
+      { method: "view", posts: ["20"], source: "account" },
+      { method: "search", query: "x", source: "account" },
+      { method: "conversation", post: "20", source: "account" },
+      { method: "timeline", handle: "x", source: "account" },
+    ],
+  ],
+  [
+    USER_READ,
+    [
+      { method: "view", handle: "x", source: "account" },
+      { method: "search", query: "x", source: "account" },
+    ],
+  ],
 ]
 const stateDir = mkdtempSync(join(tmpdir(), "cli-smoke-"))
 
@@ -53,7 +66,7 @@ async function listsTheServersTools() {
     const run = cli(["list", ...settings])
     expect(run.status === 0, `Expected exit 0 for ${label}, got ${run.status}: ${run.stderr}`)
     const listed = JSON.parse(run.stdout)
-    for (const id of [ACCOUNT_READ, POST_READ]) {
+    for (const id of [ACCOUNT_READ, POST_READ, USER_READ]) {
       expect(
         listed.some((tool) => tool.id === id && tool.class === "read"),
         `Expected ${label} to include ${id} as a read tool, got ${run.stdout}`,
@@ -97,19 +110,16 @@ function expectCliRunError(tool, input, expectedCode, label) {
   )
 }
 
-function viewsNoPostWithoutAReadingAccount() {
-  for (const args of POST_ACCOUNT_ONLY_READS) {
-    expectCliRunError(
-      POST_READ,
-      JSON.stringify(args),
-      "not_found",
-      `${POST_READ} ${args.method} with no reading account`,
+function readsNothingWithoutAReadingAccount() {
+  for (const [tool, reads] of ACCOUNT_ONLY_READS) {
+    for (const args of reads) {
+      expectCliRunError(tool, JSON.stringify(args), "not_found", `${tool} ${args.method} with no reading account`)
+    }
+    expect(readdirSync(stateDir).length === 0, `${tool} reads without a reading account must not create state`)
+    console.log(
+      `${tool} ${reads.map(({ method }) => method).join(", ")} with source account exit ${EXIT_FAILED} with not_found and no reading account.`,
     )
   }
-  expect(readdirSync(stateDir).length === 0, "Post reads without a reading account must not create state")
-  console.log(
-    `${POST_READ} view, search, conversation and timeline with source account exit ${EXIT_FAILED} with not_found and no reading account.`,
-  )
 }
 
 function rejectsAnUnknownTool() {
@@ -127,7 +137,7 @@ function rejectsConfirm() {
 try {
   await listsTheServersTools()
   readsEmptyAccounts()
-  viewsNoPostWithoutAReadingAccount()
+  readsNothingWithoutAReadingAccount()
   rejectsAnUnknownTool()
   rejectsConfirm()
 } catch (error) {
