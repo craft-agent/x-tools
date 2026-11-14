@@ -25,10 +25,10 @@ const ANONYMOUS_PATH = /^\/i\/(?:web\/)?status\/([0-9]+)(?:\/|$)/
 /** `/<handle>/status/<id>` and `/<handle>/statuses/<id>`; more path may follow. */
 const HANDLE_PATH = /^\/([A-Za-z0-9_]{1,15})\/status(?:es)?\/([0-9]+)(?:\/|$)/
 
-function invalidReference(position: number): ToolError {
+function invalidReference(argument: string): ToolError {
   return new ToolError(
     "invalid_argument",
-    `posts[${position}] is not a post id or a post URL on x.com, twitter.com or an FxTwitter mirror.`,
+    `${argument} is not a post id or a post URL on x.com, twitter.com or an FxTwitter mirror.`,
   )
 }
 
@@ -53,13 +53,14 @@ function parsePostUrl(text: string): PostRef | null {
  * The post `input` names: an id (1 to 20 digits, whitespace around it
  * ignored) or the URL of a post on `x.com`, `twitter.com` or one of the
  * FxTwitter mirrors, which may carry a path after the id (`/photo/1`), a query
- * or a fragment. Anything else throws `invalid_argument` naming `posts[position]`
- * and never echoing the input.
+ * or a fragment. Anything else throws `invalid_argument` naming the argument
+ * and never echoing the input: `posts[position]` for a position in `posts`, or
+ * the name of the argument given instead.
  */
-export function parsePostRef(input: string, position = 0): PostRef {
+export function parsePostRef(input: string, at: number | string = 0): PostRef {
   const text = input.trim()
   const ref = POST_ID_PATTERN.test(text) ? { id: text, handle: null } : parsePostUrl(text)
-  if (!ref || !POST_ID_PATTERN.test(ref.id)) throw invalidReference(position)
+  if (!ref || !POST_ID_PATTERN.test(ref.id)) throw invalidReference(typeof at === "number" ? `posts[${at}]` : at)
   return ref
 }
 

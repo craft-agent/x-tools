@@ -1,9 +1,9 @@
 import { ToolError, isToolError } from "../errors"
-import { ACCOUNT_ONLY_MESSAGE, readFromSources } from "../sources/choose"
+import { readFromSources } from "../sources/choose"
 import type { Reader } from "../sources/reader"
 import type { Answerer } from "../sources/source"
-import { NO_ACCOUNT_MESSAGE } from "../x/labels"
 import { readPostFromAccount } from "./account"
+import { checkSources } from "./check-sources"
 import { readPostFromFxTwitter } from "./fxtwitter"
 import { parsePostRefs, type NamedPostRef } from "./refs"
 import { UNTRUSTED_NOTE, type PostItem, type PostReadInput, type PostReadOutput } from "./schemas"
@@ -45,23 +45,6 @@ function notReadItem(ref: NamedPostRef, error: ToolError): PostItem {
     error: `${error.code}: ${error.message}`,
     post: null,
   }
-}
-
-/**
- * Throws what a call that can only read the reading account is told when none
- * is set up, or when FxTwitter is pinned but turned off; and, when the call
- * names a reading account, what a read of it would be told, so a mistyped
- * label fails even when FxTwitter answers every post.
- */
-async function checkSources(args: PostReadInput, reader: Reader): Promise<void> {
-  if (args.source === "fxtwitter" && reader.accountOnly) {
-    throw new ToolError("invalid_argument", ACCOUNT_ONLY_MESSAGE)
-  }
-  const accountOnly = args.source === "account" || reader.accountOnly
-  if (accountOnly && !(await reader.hasAccount())) {
-    throw new ToolError("not_found", NO_ACCOUNT_MESSAGE, { details: { known_accounts: [] } })
-  }
-  if (args.account !== undefined) await reader.checkAccount(args.account)
 }
 
 /**

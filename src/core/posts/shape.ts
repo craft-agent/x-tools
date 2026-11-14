@@ -176,7 +176,7 @@ export function assertPostId(id: string): void {
 }
 
 /** The first `limit` code points of `text`, never splitting a surrogate pair. */
-function clipCodePoints(text: string, limit: number): string {
+export function clipCodePoints(text: string, limit: number): string {
   // A code point takes at least one UTF-16 unit, so a text within the limit in units is within it in points.
   if (text.length <= limit) return text
   const points = Array.from(text)
