@@ -1,5 +1,15 @@
 import { describe, expect, test } from "bun:test"
-import { CREATED_AT, PARENT_ID, POST_ID, QUOTE_ID, sampleLinks } from "./posts.testing"
+import {
+  CREATED_AT,
+  NO_NOTE,
+  PARENT_ID,
+  POST_ID,
+  QUOTE_ID,
+  READ_AT,
+  READ_AT_MS,
+  UNKNOWN_NOTE,
+  sampleLinks,
+} from "./posts.testing"
 import {
   MAX_LINKS,
   MAX_NAME,
@@ -7,8 +17,10 @@ import {
   MAX_QUOTE_TEXT,
   assertPostId,
   clipPost,
+  communityNoteSchema,
   isoUtc,
   postUrl,
+  readAtOf,
   type Quote,
   type RawPost,
 } from "./shape"
@@ -41,6 +53,8 @@ function raw(fields: Partial<RawPost> = {}): RawPost {
     text: "A short post.",
     reply_to: null,
     quote: null,
+    read_at: READ_AT,
+    community_note: NO_NOTE,
     ...fields,
   }
 }
@@ -110,6 +124,33 @@ describe("clipPost", () => {
     expect(clipped.clipped).toEqual(["text", "author.name", "links", "quote.text", "quote.author.name", "quote.links"])
   })
 
+  test("clips a community note's text to 2000 characters, whole code points, and says so", () => {
+    const note = { status: "shown", text: `a${"😀".repeat(MAX_POST_TEXT)}` } as const
+    const clipped = clipPost(raw({ community_note: note }))
+    expect(clipped.community_note).toEqual({ status: "shown", text: `a${"😀".repeat(MAX_POST_TEXT - 1)}` })
+    expect(clipped.community_note.text).not.toMatch(LONE_SURROGATE)
+    expect(clipped.clipped).toEqual(["community_note.text"])
+  })
+
+  test("keeps a note within the limit, and a note without a text, as they are", () => {
+    const shown = { status: "shown", text: "n".repeat(MAX_POST_TEXT) } as const
+    expect(clipPost(raw({ community_note: shown }))).toMatchObject({ community_note: shown, clipped: [] })
+    for (const note of [NO_NOTE, UNKNOWN_NOTE]) {
+      expect(clipPost(raw({ community_note: note }))).toMatchObject({ community_note: note, clipped: [] })
+    }
+  })
+
+  test("names a note after the post's own paths and its quote's", () => {
+    const clipped = clipPost(
+      raw({
+        text: "x".repeat(MAX_POST_TEXT + 1),
+        quote: quote({ text: "y".repeat(MAX_QUOTE_TEXT + 1) }),
+        community_note: { status: "shown", text: "n".repeat(MAX_POST_TEXT + 1) },
+      }),
+    )
+    expect(clipped.clipped).toEqual(["text", "quote.text", "community_note.text"])
+  })
+
   test("leaves everything else as it was, a reply's parent and counts included", () => {
     const replyTo = { id: PARENT_ID, handle: null }
     const clipped = clipPost(raw({ text: "x".repeat(MAX_POST_TEXT + 1), reply_to: replyTo, quote: quote() }))
@@ -151,6 +192,19 @@ describe("the helpers", () => {
     expect(isoUtc(Date.UTC(2026, 0, 7, 10, 30, 5, 678))).toBe("2026-01-07T10:30:05Z")
     expect(isoUtc(Number.NaN)).toBeNull()
     expect(isoUtc(8.64e15 + 1)).toBeNull()
+  })
+
+  test("readAtOf stamps a moment as isoUtc does, and refuses a clock that gave no time as internal_error", () => {
+    expect(readAtOf(READ_AT_MS)).toBe(READ_AT)
+    expect(() => readAtOf(Number.NaN)).toThrow(expect.objectContaining({ code: "internal_error" }))
+  })
+
+  test("a community note is strict: a status and a text, nothing else", () => {
+    expect(communityNoteSchema.safeParse({ status: "shown", text: "Context." }).success).toBe(true)
+    expect(communityNoteSchema.safeParse({ status: "none", text: null }).success).toBe(true)
+    expect(communityNoteSchema.safeParse({ status: "maybe", text: null }).success).toBe(false)
+    expect(communityNoteSchema.safeParse({ status: "none", text: null, extra: 1 }).success).toBe(false)
+    expect(communityNoteSchema.safeParse({ status: "none" }).success).toBe(false)
   })
 
   test("assertPostId takes 1 to 20 decimal digits and refuses the rest as invalid_argument", () => {

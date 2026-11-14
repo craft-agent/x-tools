@@ -2,9 +2,22 @@ import { afterEach, beforeEach, describe, expect, test } from "bun:test"
 import { rejected } from "../fxtwitter/fxtwitter.testing"
 import { sourcesFixture, type SourcesFixture } from "../sources/sources.testing"
 import { removeTempDirs } from "../x/engine.testing"
-import { accountPost, readPostFromAccount } from "./account"
-import { CREATED_AT, PARENT_ID, POST_ID, QUOTE_ID, accountData, sampleLinks, unexpectedMatch } from "./posts.testing"
+import { accountPost as accountPostAt, readPostFromAccount } from "./account"
+import {
+  CREATED_AT,
+  PARENT_ID,
+  POST_ID,
+  QUOTE_ID,
+  READ_AT,
+  UNKNOWN_NOTE,
+  accountData,
+  sampleLinks,
+  unexpectedMatch,
+} from "./posts.testing"
 import { MAX_LINKS, MAX_POST_TEXT } from "./shape"
+import { readerAnswering as readerAnsweringById } from "./view.testing"
+
+const accountPost = (data: unknown) => accountPostAt(data, READ_AT)
 
 const COUNTS = { replies: 2, reposts: 3, likes: 40, quotes: 1, bookmarks: 5, views: 1200 }
 
@@ -26,15 +39,8 @@ afterEach(async () => {
   await removeTempDirs()
 })
 
-/** A reader whose reading account answers `data`; every read is recorded in `h.accountReads`. */
-function readerAnswering(data: unknown) {
-  return h.reader(undefined, {
-    readAccount: async (options) => {
-      h.accountReads.push(options)
-      return { account: "work", data }
-    },
-  })
-}
+/** A reader whose reading account answers `data` for `POST_ID`; every read is recorded in `h.accountReads`. */
+const readerAnswering = (data: unknown) => readerAnsweringById(h, { [POST_ID]: data })
 
 describe("accountPost", () => {
   test("maps the fields of the shape, a missing size and alt text as null", () => {
@@ -97,8 +103,15 @@ describe("accountPost", () => {
         counts: COUNTS,
         sensitive: false,
       },
+      read_at: READ_AT,
+      community_note: UNKNOWN_NOTE,
       clipped: [],
     })
+  })
+
+  test("the community note is unknown: the reading account does not report notes", () => {
+    expect(accountPost(accountData()).community_note).toEqual(UNKNOWN_NOTE)
+    expect(accountPost(accountData({ community_note: { text: "ignored" } })).community_note).toEqual(UNKNOWN_NOTE)
   })
 
   test("normalizes the date to UTC with a Z, whatever offset or fraction the bridge wrote", () => {
@@ -176,6 +189,15 @@ describe("readPostFromAccount", () => {
     expect(lookup).toMatchObject({ status: "ok", post: { id: POST_ID, created_at: CREATED_AT } })
     expect(h.accountReads).toHaveLength(1)
     expect(h.accountReads[0]).toMatchObject({ op: "post", args: { id: POST_ID }, account: undefined })
+  })
+
+  test("stamps the post with the time the reader's clock tells when the bridge answers", async () => {
+    h.clock.time = Date.parse("2026-03-04T05:06:07.890Z")
+    const lookup = await readPostFromAccount(readerAnswering(accountData()), POST_ID)
+    expect(lookup).toMatchObject({
+      status: "ok",
+      post: { read_at: "2026-03-04T05:06:07Z", community_note: UNKNOWN_NOTE },
+    })
   })
 
   test("reads through the label it is given", async () => {

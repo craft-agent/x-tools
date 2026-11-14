@@ -1,4 +1,5 @@
 import type { Answerer } from "../sources/source"
+import type { CommunityNote } from "./shape"
 
 /** Fixtures the post tests share: FxTwitter's v2 status as its schema writes it, a tombstone and the bridge's `post` data, with made-up ids and handles. */
 
@@ -10,7 +11,22 @@ export const PARENT_ID = "1700000000000000003"
 export const CREATED_TIMESTAMP = 1767781800
 export const CREATED_AT = "2026-01-07T10:30:00Z"
 
+/** The moment the post tests have a source answer, 2026-01-08T09:00:00Z, in milliseconds and as `read_at` writes it. */
+export const READ_AT_MS = Date.parse("2026-01-08T09:00:00.000Z")
+export const READ_AT = "2026-01-08T09:00:00Z"
+
+/** The `community_note` of a post whose source cannot tell. */
+export const UNKNOWN_NOTE: CommunityNote = { status: "unknown", text: null }
+
+/** The `community_note` of a post without one. */
+export const NO_NOTE: CommunityNote = { status: "none", text: null }
+
 type Json = Record<string, unknown>
+
+/** The note FxTwitter holds on a post, in v2 (`facets`) or in the legacy form (`entities`). */
+export function fxNote(text: string, form: "v2" | "legacy" = "v2"): Json {
+  return form === "v2" ? { text, facets: [] } : { text, entities: [] }
+}
 
 /** An `APIUser` as a post's author carries it. */
 export function fxUser(screenName = "ada_writes", id = "4001", name = "Ada Writes"): Json {

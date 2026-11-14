@@ -36,6 +36,8 @@ export type ReaderOverrides = {
 export type Reader = {
   /** Whether the `account_only` setting turns FxTwitter off. */
   readonly accountOnly: boolean
+  /** The clock in epoch milliseconds that the call's budget and the sources' pacing run on. */
+  now(): number
   /** The milliseconds left of the call's budget, never below 0. */
   remainingMs(): number
   /** Throws `rate_limited` (`details.reason: "call_budget"`) when no time is left. */
@@ -105,6 +107,7 @@ export function createReader(ctx: ToolContext, overrides: ReaderOverrides = {}):
 
   return {
     accountOnly: onlyAccount,
+    now,
     remainingMs,
     checkBudget,
     fxtwitter: () => (client ??= makeClient()),

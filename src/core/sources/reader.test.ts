@@ -42,6 +42,13 @@ describe("createReader: the call's time budget", () => {
     expect(() => reader.checkBudget()).not.toThrow()
   })
 
+  test("tells the time of the clock it runs on", () => {
+    const reader = h.reader()
+    expect(reader.now()).toBe(h.clock.time)
+    h.clock.time += 7000
+    expect(reader.now()).toBe(h.clock.time)
+  })
+
   test("refuses with rate_limited once nothing is left, and never counts below 0", () => {
     const reader = h.reader(undefined, { budgetMs: 1000 })
     h.clock.time += 999
