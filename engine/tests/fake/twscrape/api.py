@@ -5,6 +5,15 @@ from .models import Tweet
 from .utils import find_obj, get_by_path
 
 OP_SearchTimeline = "vLHjqbDv7TPFMBkIIO1nOA/SearchTimeline"
+OP_TweetDetail = "dQDdKtt882nl-Km98FJGSQ/TweetDetail"
+ARTICLE_FIELD_TOGGLES = {
+    "withArticleRichContentState": True,
+    "withArticlePlainText": False,
+    "withArticleSummaryText": True,
+    "withArticleVoiceOver": True,
+    "withGrokAnalyze": False,
+    "withDisallowedReplyControls": False,
+}
 
 CONSTRUCTED: list[dict] = []
 # The tweets `tweet_details` answers with, by id; an id that is not here is a tweet X does not give.

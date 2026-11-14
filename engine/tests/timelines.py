@@ -1,4 +1,4 @@
-"""Fake search pages for the `search` operation: JSON shaped as X's SearchTimeline answers, behind `.json()`."""
+"""Fake timeline pages for the `search`, `conversation` and `thread` operations: JSON shaped as X's answers, behind `.json()`."""
 
 
 class Reply:
