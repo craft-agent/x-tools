@@ -456,32 +456,38 @@ def in_timeline_order(api: Any, timeline: dict, items: list[Any], entry_id: re.P
     return [*ordered, *by_id.values()]
 
 
-async def request_timeline(
-    api: Any, operation_id: str, variables: dict, ft: dict | None = None, toggles: dict | None = None
-) -> tuple[Any, dict]:
-    """The reply of one `_gql_item` request and its timeline; raises `NoAccountError` when there is no reply."""
+async def request_page(
+    api: Any,
+    operation_id: str,
+    variables: dict,
+    ft: dict | None = None,
+    toggles: dict | None = None,
+    parse: Callable[[Any], Any] | None = None,
+    entry_id: re.Pattern = ENTRY_POST_ID,
+) -> tuple[dict, list[Any]]:
+    """The timeline and parsed items (in timeline order) of one `_gql_item` request; raises `NoAccountError` when none."""
     rep = await api._gql_item(operation_id, variables, ft=ft, toggles=toggles)
     if rep is None:
         raise importlib.import_module(TWSCRAPE).NoAccountError(
             f"No account available for queue {operation_id.split('/')[-1]}"
         )
-    return rep, rep.json()
+    timeline = rep.json()
+    parser = parse or importlib.import_module(f"{TWSCRAPE}.models").parse_tweets
+    return timeline, in_timeline_order(api, timeline, list(parser(rep)), entry_id)
 
 
-async def request_page(
-    api: Any, operation_id: str, variables: dict, ft: dict | None = None, toggles: dict | None = None
-) -> tuple[dict, list[Any]]:
-    """The timeline and tweets (in timeline order) of one `_gql_item` request; raises `NoAccountError` when none."""
-    rep, timeline = await request_timeline(api, operation_id, variables, ft=ft, toggles=toggles)
-    parse_tweets = importlib.import_module(f"{TWSCRAPE}.models").parse_tweets
-    return timeline, in_timeline_order(api, timeline, list(parse_tweets(rep)))
+def paged_items(
+    api: Any, timeline: dict, items: list[Any], count: int, key: str, shape: Callable[[Any], dict]
+) -> dict:
+    """One page of `items` under `key`, capped to `count`, with the bottom cursor when non-empty."""
+    items = items[:count]
+    cursor = api._get_cursor(timeline, BOTTOM_CURSOR) if items else None
+    return {key: [shape(item) for item in items], "cursor": cursor}
 
 
 def paged_posts(api: Any, timeline: dict, tweets: list[Any], count: int) -> dict:
     """One page of posts capped to `count`, with the bottom cursor when non-empty."""
-    tweets = tweets[:count]
-    cursor = api._get_cursor(timeline, BOTTOM_CURSOR) if tweets else None
-    return {"posts": [post_of(tweet) for tweet in tweets], "cursor": cursor}
+    return paged_items(api, timeline, tweets, count, "posts", post_of)
 
 
 def search_variables(args: dict, product: str) -> dict:
@@ -548,10 +554,10 @@ async def read_user_search(api: Any, args: dict) -> dict:
     parse_users = importlib.import_module(f"{TWSCRAPE}.models").parse_users
     variables = search_variables(args, USER_SEARCH_PRODUCT)
     with refusal_of_search():
-        rep, timeline = await request_timeline(api, operation_id, variables, toggles=SEARCH_TOGGLES)
-    users = in_timeline_order(api, timeline, list(parse_users(rep)), ENTRY_USER_ID)[: args["count"]]
-    cursor = api._get_cursor(timeline, BOTTOM_CURSOR) if users else None
-    return {"users": [user_of(user) for user in users], "cursor": cursor}
+        timeline, users = await request_page(
+            api, operation_id, variables, toggles=SEARCH_TOGGLES, parse=parse_users, entry_id=ENTRY_USER_ID
+        )
+    return paged_items(api, timeline, users, args["count"], "users", user_of)
 
 
 def check_conversation_args(args: dict) -> None:
