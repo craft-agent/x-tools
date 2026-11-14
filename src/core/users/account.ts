@@ -1,13 +1,11 @@
 import { z } from "zod"
 import { accountRowsPageOf, type AccountListAsk, type AccountRows } from "../posts/account.list"
+import { USER_OPERATION } from "../posts/account.timeline"
 import { POST_NOT_FOUND, isoUtc, nullishNumber, readAtOf, unexpectedReplyError } from "../posts/shape"
 import type { Page } from "../sources/page"
 import type { Reader } from "../sources/reader"
 import { USER_ID_PATTERN } from "../x/user-ids"
 import { clipUser, locationOf, lowercaseOrNull, userUrl, type User, type UserLookup } from "./shape"
-
-/** The bridge's `user` operation. */
-const USER_OPERATION = "user"
 
 /** The bridge's `user_search` operation. */
 const USER_SEARCH_OPERATION = "user_search"
@@ -77,7 +75,7 @@ export function userFromAccount(data: unknown, readAt: string): User {
 }
 
 /** The rows of a page of users: the bridge's `users`, each as its `user` operation gives an account. */
-export const ACCOUNT_USER_ROWS: AccountRows<User> = { key: "users", read: userFromAccount }
+const ACCOUNT_USER_ROWS: AccountRows<User> = { key: "users", read: userFromAccount }
 
 /**
  * Reads the profile of the account `handle` through the reading account

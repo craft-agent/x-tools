@@ -1,15 +1,13 @@
 import { z } from "zod"
 import type { FxClient } from "../fxtwitter/client"
-import { HTTP_OK, readFxRoute } from "../posts/fxtwitter"
+import { HTTP_OK } from "../posts/fxtwitter"
 import { isRowOfType, readRowsFromFxTwitter, type FxListAsk, type FxRows } from "../posts/fxtwitter.list"
-import { missingAccountGone } from "../posts/fxtwitter.timeline"
+import { profilePath, readProfileRoute } from "../posts/fxtwitter.timeline"
 import { nullishNumber, readAtOf, unexpectedReplyError } from "../posts/shape"
 import type { FxOutcome } from "../sources/choose"
 import type { Page } from "../sources/page"
 import { parseJoined } from "./joined"
 import { clipUser, locationOf, lowercaseOrNull, userUrl, type User, type UserLookup } from "./shape"
-
-const PROFILE_PATH = "/2/profile/"
 
 const SEARCH_PATH = "/2/search/users"
 
@@ -90,7 +88,7 @@ export function userFromFxTwitter(row: unknown, readAt: string): User {
 }
 
 /** The rows of a list of users: its profiles. */
-export const FX_USER_ROWS: FxRows<User> = {
+const FX_USER_ROWS: FxRows<User> = {
   isItem: (row) => isRowOfType(row, PROFILE_TYPE),
   read: userFromFxTwitter,
 }
@@ -122,11 +120,12 @@ export async function readUserFromFxTwitter(
   handle: string,
   now: () => number,
 ): Promise<FxOutcome<UserLookup>> {
-  return readFxRoute<UserLookup>(client, `${PROFILE_PATH}${encodeURIComponent(handle)}`, {
-    found: (body) => ({ status: "ok", user: userFromFxTwitter(userField(body), readAtOf(now())) }),
-    unauthorized: (outcome) => outcome,
-    notFound: (body) => ({ kind: "answer", value: missingAccountGone(body) }),
-  })
+  return readProfileRoute<UserLookup>(
+    client,
+    profilePath(handle),
+    (body) => ({ status: "ok", user: userFromFxTwitter(userField(body), readAtOf(now())) }),
+    (gone) => gone,
+  )
 }
 
 /**

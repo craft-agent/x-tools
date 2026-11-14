@@ -7,7 +7,7 @@ import { POST_NOT_FOUND, unexpectedReplyError } from "./shape"
 import { goneTimeline, type TimelinePage } from "./timeline.shape"
 
 /** The bridge's `user` operation. */
-const USER_OPERATION = "user"
+export const USER_OPERATION = "user"
 
 /** The bridge's `timeline` operation. */
 const TIMELINE_OPERATION = "timeline"
