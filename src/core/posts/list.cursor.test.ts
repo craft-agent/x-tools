@@ -39,6 +39,8 @@ const READS: Record<PostMethod, (args: PostReadInput, reader: Reader) => Promise
   search: searchPosts,
   quotes: quotesOfPost,
   mentions: mentionsOfAccount,
+  conversation: async () => undefined,
+  thread: async () => undefined,
 }
 
 /** The error a call with `cursor` fails with, after checking that no request was made to FxTwitter or the reading account. */

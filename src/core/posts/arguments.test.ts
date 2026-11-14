@@ -4,12 +4,15 @@ import { MAX_LIMIT } from "../sources/page"
 import type { Reader } from "../sources/reader"
 import { sourcesFixture, type SourcesFixture } from "../sources/sources.testing"
 import { removeTempDirs } from "../x/engine.testing"
+import { conversationOfPost } from "./conversation"
+import { accountConversation, accountThread, conversation, thread } from "./conversation.testing"
 import { accountPage, mentions, quotes, readerPaging, search } from "./list.testing"
 import { mentionsOfAccount } from "./mentions"
 import { quotesOfPost } from "./quotes"
 import { xPostRead } from "./read"
 import { MAX_POST_REF_LENGTH, MAX_QUERY_LENGTH, type PostMethod, type PostReadInput } from "./schemas"
 import { searchPosts } from "./search"
+import { threadOfPost } from "./thread"
 import { viewPosts } from "./view"
 
 let h: SourcesFixture
@@ -28,6 +31,8 @@ const HANDLERS: Record<PostMethod, (args: PostReadInput, reader: Reader) => Prom
   search: searchPosts,
   quotes: quotesOfPost,
   mentions: mentionsOfAccount,
+  conversation: conversationOfPost,
+  thread: threadOfPost,
 }
 
 /** What each argument carries in these tests; a string holds a marker that no message may repeat. */
@@ -35,6 +40,7 @@ const VALUES = {
   posts: ["SECRET"],
   query: "SECRET",
   feed: "top",
+  sort: "latest",
   post: "SECRET",
   handle: "SECRET",
   since: "SECRET",
@@ -48,16 +54,27 @@ const VALID: Record<PostMethod, PostReadInput> = {
   search: search("from:ada"),
   quotes: quotes("20"),
   mentions: mentions("ada"),
+  conversation: conversation("20"),
+  thread: thread("20"),
 }
 
 const FOREIGN: Record<PostMethod, (keyof typeof VALUES)[]> = {
-  view: ["query", "feed", "post", "handle", "since", "limit", "cursor"],
-  search: ["posts", "post", "handle", "since"],
-  quotes: ["posts", "query", "feed", "handle", "since"],
-  mentions: ["posts", "query", "feed", "post"],
+  view: ["query", "feed", "sort", "post", "handle", "since", "limit", "cursor"],
+  search: ["posts", "sort", "post", "handle", "since"],
+  quotes: ["posts", "query", "feed", "sort", "handle", "since"],
+  mentions: ["posts", "query", "feed", "sort", "post"],
+  conversation: ["posts", "query", "feed", "handle", "since", "limit"],
+  thread: ["posts", "query", "feed", "sort", "handle", "since", "limit", "cursor"],
 }
 
-const REQUIRED: Record<PostMethod, string> = { view: "posts", search: "query", quotes: "post", mentions: "handle" }
+const REQUIRED: Record<PostMethod, string> = {
+  view: "posts",
+  search: "query",
+  quotes: "post",
+  mentions: "handle",
+  conversation: "post",
+  thread: "post",
+}
 
 /** The error `method` fails with for `args`, after checking that nothing was read. */
 async function refusal(args: unknown) {
@@ -105,11 +122,18 @@ describe("an argument the method does not take", () => {
 
   test("source and account belong to every method", async () => {
     await h.label()
-    for (const method of ["search", "quotes", "mentions"] as const) {
-      const reader = readerPaging(h, accountPage([]))
+    const data = {
+      search: accountPage([]),
+      quotes: accountPage([]),
+      mentions: accountPage([]),
+      conversation: accountConversation("20"),
+      thread: accountThread(["20"]),
+    }
+    for (const method of Object.keys(data) as (keyof typeof data)[]) {
+      const reader = readerPaging(h, data[method])
       await HANDLERS[method]({ ...VALID[method], source: "account", account: "default" }, reader)
     }
-    expect(h.accountReads).toHaveLength(3)
+    expect(h.accountReads).toHaveLength(5)
   })
 })
 
@@ -152,9 +176,8 @@ describe("the handle and the day of mentions", () => {
 describe("the input schema", () => {
   const parses = (args: Record<string, unknown>) => xPostRead.input.strict().safeParse(args).success
 
-  test("every field but method is optional, and the method must be one of four", () => {
-    expect(parses({ method: "view" })).toBe(true)
-    expect(parses({ method: "search" })).toBe(true)
+  test("every field but method is optional, and the method must be one of six", () => {
+    for (const method of Object.keys(HANDLERS)) expect(parses({ method })).toBe(true)
     expect(parses({ method: "timeline" })).toBe(false)
     expect(parses({})).toBe(false)
   })
@@ -167,6 +190,8 @@ describe("the input schema", () => {
     expect(parses({ method: "mentions", handle: `@${"a".repeat(16)}` })).toBe(false)
     expect(parses({ method: "search", feed: "media" })).toBe(true)
     expect(parses({ method: "search", feed: "oldest" })).toBe(false)
+    expect(parses({ method: "conversation", sort: "latest" })).toBe(true)
+    expect(parses({ method: "conversation", sort: "oldest" })).toBe(false)
     for (const limit of [0, MAX_LIMIT + 1, 2.5]) expect(parses({ method: "search", limit })).toBe(false)
     expect(parses({ method: "search", limit: MAX_LIMIT, cursor: "c" })).toBe(true)
   })
@@ -176,11 +201,12 @@ describe("the input schema", () => {
     expect(shape.posts.description).toContain("`view`")
     expect(shape.query.description).toContain("`search`")
     expect(shape.feed.description).toContain("`search`")
-    expect(shape.post.description).toContain("`quotes`")
+    for (const method of ["`quotes`", "`conversation`", "`thread`"]) expect(shape.post.description).toContain(method)
+    expect(shape.sort.description).toContain("`conversation`")
     expect(shape.handle.description).toContain("`mentions`")
     expect(shape.since.description).toContain("`mentions`")
-    for (const field of [shape.limit, shape.cursor]) {
-      expect(field.description).toContain("`search`, `quotes` and `mentions`")
-    }
+    expect(shape.limit.description).toContain("`search`, `quotes` and `mentions`")
+    expect(shape.limit.description).not.toContain("`conversation`")
+    expect(shape.cursor.description).toContain("`search`, `quotes`, `mentions` and `conversation`")
   })
 })

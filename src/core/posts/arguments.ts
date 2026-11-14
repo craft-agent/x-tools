@@ -6,7 +6,7 @@ type ArgumentName = keyof PostReadInput
 /** The arguments every method takes. */
 const SHARED_ARGUMENTS: readonly ArgumentName[] = ["method", "source", "account"]
 
-/** The arguments every paged method takes. */
+/** The arguments every list that cuts its pages to a size takes. */
 const PAGED_ARGUMENTS: readonly ArgumentName[] = ["limit", "cursor"]
 
 /** The arguments each method takes besides the shared ones. */
@@ -15,6 +15,10 @@ const METHOD_ARGUMENTS: Readonly<Record<PostMethod, readonly ArgumentName[]>> = 
   search: ["query", "feed", ...PAGED_ARGUMENTS],
   quotes: ["post", ...PAGED_ARGUMENTS],
   mentions: ["handle", "since", ...PAGED_ARGUMENTS],
+  // The sources set the size of a page of replies, so there is no `limit`.
+  conversation: ["post", "sort", "cursor"],
+  // X gives a thread whole: no page, no `limit`, no `cursor`.
+  thread: ["post"],
 }
 
 /** Every argument the schema has, in its order. */
