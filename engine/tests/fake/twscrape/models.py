@@ -1,8 +1,8 @@
-"""The fake models: the fields of twscrape 0.21.0's `Tweet` and what it holds that the bridge reads, under its names."""
+"""The fake models: the fields of twscrape 0.21.0's `Tweet` and `User` and what they hold that the bridge reads, under its names."""
 
 from dataclasses import dataclass, field
 from collections.abc import Generator
-from datetime import datetime
+from datetime import datetime, timezone
 
 
 @dataclass
@@ -26,6 +26,23 @@ class User:
     id_str: str
     username: str
     displayname: str
+    rawDescription: str = ""
+    created: datetime = datetime(2020, 1, 1, tzinfo=timezone.utc)
+    followersCount: int = 0
+    friendsCount: int = 0
+    statusesCount: int = 0
+    favouritesCount: int = 0
+    listedCount: int = 0
+    mediaCount: int = 0
+    location: str = ""
+    profileImageUrl: str = ""
+    profileBannerUrl: str | None = None
+    protected: bool | None = None
+    verified: bool | None = None
+    blue: bool | None = None
+    blueType: str | None = None
+    descriptionLinks: list[TextLink] = field(default_factory=list)
+    pinnedIds: list[int] = field(default_factory=list)
 
 
 @dataclass

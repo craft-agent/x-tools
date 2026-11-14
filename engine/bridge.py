@@ -108,6 +108,38 @@ THREAD_FEATURES = {
     "responsive_web_grok_image_annotation_enabled": True,
     "responsive_web_enhance_cards_enabled": False,
 }
+# The argument of `user`: an X handle, without the `@` (not `\w`, which takes other scripts' letters).
+USER_ARGS = frozenset({"handle"})
+HANDLE = re.compile(r"[A-Za-z0-9_]{1,15}")
+# The arguments of `timeline`, and what each may hold: a user id is decimal digits, as X's ids are.
+TIMELINE_ARGS = frozenset({"user_id", "tab", "count", "cursor"})
+USER_ID = re.compile(r"[0-9]{1,20}")
+# The twscrape operation each tab of a profile's timeline reads (`user_tweets_raw`, `user_tweets_and_replies_raw`,
+# `user_media_raw`), the variables it sends beside `userId` and `count` (twscrape keeps them inside the function),
+# and the toggles of the one that sends any.
+TIMELINE_OPERATIONS = {"posts": "OP_UserTweets", "replies": "OP_UserTweetsAndReplies", "media": "OP_UserMedia"}
+TIMELINE_VARIABLES = {
+    "posts": {
+        "includePromotedContent": True,
+        "withQuickPromoteEligibilityTweetFields": True,
+        "withVoice": True,
+        "withV2Timeline": True,
+    },
+    "replies": {
+        "includePromotedContent": True,
+        "withCommunity": True,
+        "withVoice": True,
+        "withV2Timeline": True,
+    },
+    "media": {
+        "includePromotedContent": False,
+        "withClientEventToken": False,
+        "withBirdwatchNotes": False,
+        "withVoice": True,
+        "withV2Timeline": True,
+    },
+}
+TIMELINE_TOGGLES = {"media": {"withArticlePlainText": False}}
 # A timeline entry's id ends in the id of the post it holds: `tweet-<id>`, or `<prefix>-<id>` in a module.
 ENTRY_POST_ID = re.compile(r"-([0-9]+)$")
 # What twscrape's `AbortReqError` says once X has answered 404 to a request three times, which X does to a
@@ -575,6 +607,94 @@ async def read_thread(api: Any, args: dict) -> dict | None:
         thread.append(follow_up)
         used.add(follow_up.id_str)
     return {"posts": [post_of(tweet) for tweet in thread]}
+
+
+def check_user_args(args: dict) -> None:
+    """Raises `Failure("invalid_request")` unless `args` holds exactly a handle of 1 to 15 letters, digits or `_`.
+
+    The message names the argument and never repeats its value.
+    """
+    if set(args) != USER_ARGS:
+        raise Failure("invalid_request", "args does not hold exactly handle")
+    handle = args["handle"]
+    if not isinstance(handle, str) or HANDLE.fullmatch(handle) is None:
+        raise Failure("invalid_request", "args.handle is not a handle of 1 to 15 letters, digits or underscores")
+
+
+def user_of(user: Any) -> dict:
+    """The compact dict of a twscrape `User` that the package's profile shape is built from."""
+    return {
+        "id": user.id_str,
+        "username": user.username,
+        "displayname": user.displayname,
+        "description": user.rawDescription,
+        "location": user.location,
+        "created": iso_utc(user.created),
+        "followers": user.followersCount,
+        "following": user.friendsCount,
+        "posts": user.statusesCount,
+        "media": user.mediaCount,
+        "likes": user.favouritesCount,
+        "listed": user.listedCount,
+        "protected": user.protected,
+        "verified": user.verified,
+        "blue": user.blue,
+        "blue_type": user.blueType,
+        "links": [link.url for link in user.descriptionLinks],
+        "avatar": user.profileImageUrl,
+        "banner": user.profileBannerUrl,
+        "pinned": [str(post_id) for post_id in user.pinnedIds],
+    }
+
+
+@operation("user", check_args=check_user_args)
+async def read_user(api: Any, args: dict) -> dict | None:
+    """One account by handle: its compact dict, or None when X shows none (missing, suspended or deactivated)."""
+    user = await api.user_by_login(args["handle"])
+    return user_of(user) if user is not None else None
+
+
+def check_timeline_args(args: dict) -> None:
+    """Raises `Failure("invalid_request")` unless `args` holds exactly a user id, a tab, a count and a cursor.
+
+    The messages name the argument and never repeat its value.
+    """
+    if set(args) != TIMELINE_ARGS:
+        raise Failure("invalid_request", "args does not hold exactly user_id, tab, count and cursor")
+    user_id, tab, count = args["user_id"], args["tab"], args["count"]
+    if not isinstance(user_id, str) or USER_ID.fullmatch(user_id) is None:
+        raise Failure("invalid_request", "args.user_id is not a user id of 1 to 20 digits")
+    if not isinstance(tab, str) or tab not in TIMELINE_OPERATIONS:
+        raise Failure("invalid_request", f"args.tab is not one of {', '.join(TIMELINE_OPERATIONS)}")
+    if not isinstance(count, int) or isinstance(count, bool) or not 1 <= count <= MAX_COUNT:
+        raise Failure("invalid_request", f"args.count is not a whole number from 1 to {MAX_COUNT}")
+    check_cursor_arg(args["cursor"])
+
+
+def has_media(tweet: Any) -> bool:
+    """Whether `tweet` holds a photo, a video or an animated gif, as twscrape's `user_media` accepts it."""
+    return bool(tweet.media and (tweet.media.photos or tweet.media.videos or tweet.media.animated))
+
+
+@operation("timeline", check_args=check_timeline_args)
+async def read_timeline(api: Any, args: dict) -> dict:
+    """One page of an account's posts, replies or media: `{"posts": [...], "cursor": str | None}`.
+
+    The one request is made here, with the operation and variables twscrape's own reading of the tab sends (but for
+    `count`): twscrape pages inside a generator. The posts are those X lists, in the order it lists them, as many as
+    `count`; the `media` tab keeps only the tweets that hold media. A page without posts has no cursor.
+    """
+    tab = args["tab"]
+    operation_id = getattr(importlib.import_module(f"{TWSCRAPE}.api"), TIMELINE_OPERATIONS[tab])
+    variables = {"userId": args["user_id"], "count": args["count"], **TIMELINE_VARIABLES[tab]}
+    if args["cursor"] is not None:
+        variables["cursor"] = args["cursor"]
+    timeline, tweets = await request_page(api, operation_id, variables, toggles=TIMELINE_TOGGLES.get(tab))
+    if tab == "media":
+        tweets = [tweet for tweet in tweets if has_media(tweet)]
+    tweets = tweets[: args["count"]]
+    cursor = api._get_cursor(timeline, BOTTOM_CURSOR) if tweets else None
+    return {"posts": [post_of(tweet) for tweet in tweets], "cursor": cursor}
 
 
 def failure_kind(exc: Exception, twscrape: Any) -> str:
