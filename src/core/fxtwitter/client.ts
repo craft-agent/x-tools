@@ -1,7 +1,7 @@
 import { ToolError, isAbortError } from "../errors"
 import { ensurePrivateDir } from "../x/private-dir"
 import { stateRoot } from "../x/labels"
-import { waitForReadLock } from "../x/read-lock"
+import { DEFAULT_LOCK_WAIT_MS, waitForReadLock } from "../x/read-lock"
 import { abortableSleep } from "../x/sleep"
 import {
   callsInLastDay,
@@ -17,9 +17,6 @@ import { checkFxPath, fxGet, type Connect, type FxResponse } from "./transport"
 
 /** How many failures in a row end FxTwitter's part of a call. */
 export const MAX_FAILURES_IN_A_ROW = 3
-
-/** How long a request waits for another one to finish: a little over one request's time limit, as for the reading account. */
-const DEFAULT_LOCK_WAIT_MS = 90_000
 
 const LOCK_HELD_MESSAGE = "Another read of FxTwitter is still running; try again shortly."
 

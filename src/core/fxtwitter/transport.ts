@@ -1,6 +1,7 @@
 import type { ClientRequest, IncomingMessage } from "node:http"
 import { request as httpsRequest, type RequestOptions } from "node:https"
-import { ToolError, isAbortError } from "../errors"
+import { ToolError } from "../errors"
+import { abortError } from "../exec"
 
 /** The only host the client talks to, redirects included. */
 export const FX_HOST = "api.fxtwitter.com"
@@ -70,12 +71,6 @@ function mayFollow(url: URL): boolean {
   return (
     url.protocol === "https:" && url.hostname === FX_HOST && url.port === "" && url.pathname.startsWith(PATH_PREFIX)
   )
-}
-
-function abortError(signal: AbortSignal): Error {
-  const { reason } = signal
-  if (isAbortError(reason)) return reason as Error
-  return Object.assign(new Error("The operation was aborted.", { cause: reason }), { name: "AbortError" })
 }
 
 /** The parsed JSON of `text`; null when it is blank; throws `not_json` otherwise. */

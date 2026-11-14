@@ -13,6 +13,9 @@ const FILE_MODE = 0o600
 const SQLITE_BUSY = 5
 const PRIMARY_CODE_MASK = 0xff
 
+/** How long a read waits for a held lock, unless told otherwise: a little over one read's time limit. */
+export const DEFAULT_LOCK_WAIT_MS = 90_000
+
 /** How often a waiting read tries the lock again, unless told otherwise. */
 const DEFAULT_POLL_MS = 250
 
