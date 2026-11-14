@@ -90,6 +90,7 @@ describe("stateRoot and labelPaths", () => {
       cookies: join(dir, "cookies"),
       lock: join(dir, "read.lock"),
       pacing: join(dir, "pacing.json"),
+      userIds: join(dir, "user-ids.json"),
     })
   })
 
