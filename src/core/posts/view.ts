@@ -84,7 +84,7 @@ export async function viewPosts(args: PostReadInput, reader: Reader): Promise<Po
   for (const ref of refs) {
     try {
       const { source, value } = await readFromSources(reader, args.source, {
-        fxtwitter: (client) => readPostFromFxTwitter(client, ref.id),
+        fxtwitter: (client) => readPostFromFxTwitter(client, ref.id, reader.now),
         account: (accountReader) => readPostFromAccount(accountReader, ref.id, args.account),
       })
       posts.push(answeredItem(ref, value, source))

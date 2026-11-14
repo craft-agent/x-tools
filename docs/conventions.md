@@ -720,8 +720,9 @@ and every entry point checks them the same way.
 - **Every result names the source that answered it.** FxTwitter's answers
   are its operator's, read through its own access to X, and a caller weighing
   them should know which it got.
-- **A cursor is opaque and stays with its source and read**: it continues
-  only there, since the two sources page differently.
+- **A cursor is opaque and continues only on the source, the read and the
+  arguments that gave it.** The two sources page differently, and a cursor
+  reused with other words would page something else without saying so.
 - **The `account_only` setting turns FxTwitter off**, so reads go only to
   the reading account. What a read asks for (a search's words, the handles
   read) reaches a third party, which some users must not allow. It is a
@@ -743,6 +744,31 @@ and every entry point checks them the same way.
   and three failures in a row ending FxTwitter's part of a call. The settings
   let a user be gentler with a service they share; the fixed limits only keep
   a hung or runaway reply from holding a call.
+
+## Pages
+
+- **A paged read takes `limit` and `cursor`, and returns the next `cursor`**,
+  or null when there is no more. `limit` is 20 by default, 1 to 50. Every
+  paged read pages alike, so a caller follows one rule for all of them.
+- **`limit` is an upper bound, and a page may hold fewer with more to
+  come.** A page is one request to its source, and X ends most pages near 20
+  items whatever is asked, so a caller follows `cursor`, not the count.
+  Filling a page would spend several reads of the reading account.
+- **Through the reading account a page is one request to X and counts as one
+  read**, so the pacing and the caps count pages as they count every read.
+- **A list asks FxTwitter for `limit` items**, under the one reply cap: a
+  larger ask would only reach the cap, and FxTwitter ends its pages by itself.
+
+## Posts
+
+- **Every post carries `read_at`**, the time the source answered it, so reads
+  taken at different times compare: counts and notes change.
+- **Every post carries `community_note`**, the note X shows on it: `shown`
+  with its text, `none`, or `unknown` when the source cannot tell. The reading
+  account does not report notes, so a post read there is `unknown`, and a post
+  read where notes are not told never reads as one without a note.
+- **A note's text is other people's text like the post's**, so it is clipped
+  like it and the result says where.
 
 ## What the tools never read
 

@@ -1,10 +1,12 @@
 import { describe, expect, test } from "bun:test"
-import { fxPost } from "./fxtwitter"
+import { fxPost as fxPostAt } from "./fxtwitter"
 import {
   CREATED_AT,
+  NO_NOTE,
   PARENT_ID,
   POST_ID,
   QUOTE_ID,
+  READ_AT,
   fxLinkFacet,
   fxMosaic,
   fxPhoto,
@@ -15,6 +17,8 @@ import {
   unexpectedMatch,
 } from "./posts.testing"
 import { MAX_LINKS, MAX_POST_TEXT } from "./shape"
+
+const fxPost = (status: unknown) => fxPostAt(status, READ_AT)
 
 const EMPTY_COUNTS = { replies: null, reposts: null, likes: null, quotes: null, bookmarks: null, views: null }
 
@@ -89,6 +93,8 @@ describe("fxPost: a full post", () => {
         counts: { replies: 2, reposts: 3, likes: 40, quotes: 1, bookmarks: 5, views: null },
         sensitive: true,
       },
+      read_at: READ_AT,
+      community_note: NO_NOTE,
       clipped: [],
     })
   })
@@ -198,6 +204,8 @@ describe("fxPost: what is missing or gone", () => {
       sensitive: null,
       reply_to: null,
       quote: null,
+      read_at: READ_AT,
+      community_note: NO_NOTE,
       clipped: [],
     })
   })

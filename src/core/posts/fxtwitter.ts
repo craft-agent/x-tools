@@ -10,7 +10,9 @@ import {
   nullishCountsShape,
   nullishNumber,
   postUrl,
+  readAtOf,
   unexpectedReplyError,
+  type CommunityNote,
   type Media,
   type Post,
   type Quote,
@@ -57,8 +59,12 @@ const statusFieldsSchema = z.object({
 /** A quote that is gone: FxTwitter says so with a tombstone, and the post has no quote then. */
 const tombstoneSchema = z.object({ type: z.literal("tombstone") })
 
+/** The community note FxTwitter holds on a post, in v2 (`facets`) and in the legacy form (`entities`): only its text is read. */
+const communityNoteFieldSchema = z.object({ text: z.string() })
+
 const statusSchema = statusFieldsSchema.extend({
   quote: z.union([statusFieldsSchema, tombstoneSchema]).nullish(),
+  community_note: communityNoteFieldSchema.nullish(),
 })
 
 /** Why FxTwitter reports a post as gone. */
@@ -115,27 +121,37 @@ function mapQuote(status: FxStatusFields): Quote {
   }
 }
 
-/** The post `status` holds, clipped; `httpStatus` goes into the error of a status that is off shape. */
-function postFrom(status: unknown, httpStatus?: number): Post {
+/** The community note of a status: `shown` with its text, `none` for a `null`, and `unknown` when FxTwitter leaves the field out. */
+function mapNote(note: z.infer<typeof communityNoteFieldSchema> | null | undefined): CommunityNote {
+  if (note === undefined) return { status: "unknown", text: null }
+  return note === null ? { status: "none", text: null } : { status: "shown", text: note.text }
+}
+
+/** The post `status` holds, clipped, read at `readAt`; `httpStatus` goes into the error of a status that is off shape. */
+function postFrom(status: unknown, readAt: string, httpStatus?: number): Post {
   const parsed = statusSchema.safeParse(status)
   if (!parsed.success) throw unexpectedReplyError("fxtwitter", { status: httpStatus })
-  const { quote, replying_to: replyingTo } = parsed.data
+  const { quote, replying_to: replyingTo, community_note: note } = parsed.data
   return clipPost({
     ...mapQuote(parsed.data),
     reply_to: replyingTo ? { id: replyingTo.status, handle: replyingTo.screen_name } : null,
     quote: quote?.type === "status" ? mapQuote(quote) : null,
+    read_at: readAt,
+    community_note: mapNote(note),
   })
 }
 
 /**
- * The post a v2 `APITwitterStatus` (`type: "status"`) holds: the same shape
- * whichever source answered, clipped, with a field FxTwitter leaves out null.
- * A quote that is a tombstone or absent is null; a mosaic among the media is
- * skipped. A status that is off shape throws `upstream_error` with
- * `details.reason` `unexpected_reply`.
+ * The post a v2 `APITwitterStatus` (`type: "status"`) holds, read at `readAt`
+ * (ISO 8601 UTC): the same shape whichever source answered, clipped, with a
+ * field FxTwitter leaves out null. A quote that is a tombstone or absent is
+ * null; a mosaic among the media is skipped. The community note is `shown`
+ * with its text, `none` when FxTwitter says `null`, and `unknown` when it
+ * leaves the field out. A status that is off shape, a note without a text
+ * included, throws `upstream_error` with `details.reason` `unexpected_reply`.
  */
-export function fxPost(status: unknown): Post {
-  return postFrom(status)
+export function fxPost(status: unknown, readAt: string): Post {
+  return postFrom(status, readAt)
 }
 
 /** The `status` field of a reply's body; throws `unexpected_reply` for a body that is not an object holding one. */
@@ -179,15 +195,23 @@ function goneOutcome(body: unknown): FxOutcome<PostLookup> {
  * - Anything else, a body off shape included: `upstream_error` with
  *   `details.reason` `unexpected_reply`.
  *
+ * The post's `read_at` is the time `now` tells as the reply arrives.
  * What the client throws (a 429, a 5xx, a failed request) propagates.
  * Throws `invalid_argument` for an `id` that is not a decimal number.
  */
-export async function readPostFromFxTwitter(client: FxClient, id: string): Promise<FxOutcome<PostLookup>> {
+export async function readPostFromFxTwitter(
+  client: FxClient,
+  id: string,
+  now: () => number,
+): Promise<FxOutcome<PostLookup>> {
   assertPostId(id)
   const { status, body } = await client.get(`${STATUS_PATH}${id}`)
   switch (status) {
     case HTTP_OK:
-      return { kind: "answer", value: { status: "ok", post: postFrom(statusField(body, status), status) } }
+      return {
+        kind: "answer",
+        value: { status: "ok", post: postFrom(statusField(body, status), readAtOf(now()), status) },
+      }
     case HTTP_UNAUTHORIZED:
       return { kind: "fallback", reason: "protected", value: { status: "protected", reason: "protected" } }
     case HTTP_NOT_FOUND:

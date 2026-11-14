@@ -3,7 +3,7 @@ import { clientFixture, type ClientFixture } from "../fxtwitter/client.testing"
 import { rejected } from "../fxtwitter/fxtwitter.testing"
 import { readPostFromFxTwitter } from "./fxtwitter"
 import type { PostLookup } from "./shape"
-import { POST_ID, fxReply, fxStatus, fxTombstone, unexpectedMatch } from "./posts.testing"
+import { POST_ID, READ_AT, READ_AT_MS, fxNote, fxReply, fxStatus, fxTombstone, unexpectedMatch } from "./posts.testing"
 
 const PATH = `/2/status/${POST_ID}`
 
@@ -22,10 +22,17 @@ function reply(status: number, body?: unknown, headers?: Record<string, string>)
 }
 
 function read(id = POST_ID) {
-  return readPostFromFxTwitter(h.client(), id)
+  return readPostFromFxTwitter(h.client(), id, () => READ_AT_MS)
 }
 
 describe("readPostFromFxTwitter: what FxTwitter answers", () => {
+  test("a post is stamped with the time the clock tells when the reply arrives", async () => {
+    reply(200, fxReply(200, fxStatus({ community_note: fxNote("Context.") })))
+    expect((await read()).value).toMatchObject({
+      post: { read_at: READ_AT, community_note: { status: "shown", text: "Context." } },
+    })
+  })
+
   test("a post is an answer with the post, from /2/status/<id>", async () => {
     reply(200, fxReply(200, fxStatus()))
     const outcome = await read()
