@@ -81,6 +81,8 @@ export type LabelPaths = {
   lock: string
   /** The call times and what X last made of the session. */
   pacing: string
+  /** The handle → user id cache. */
+  userIds: string
 }
 
 /** Resolves the state paths for `label`; throws `invalid_argument` for a bad label and `internal_error` for a relative `stateDir`. */
@@ -88,7 +90,14 @@ export function labelPaths(stateDir: string, label: string): LabelPaths {
   const { accounts } = stateRoot(stateDir)
   checkLabel(label)
   const dir = join(accounts, label)
-  return { label, dir, cookies: join(dir, "cookies"), lock: join(dir, "read.lock"), pacing: join(dir, "pacing.json") }
+  return {
+    label,
+    dir,
+    cookies: join(dir, "cookies"),
+    lock: join(dir, "read.lock"),
+    pacing: join(dir, "pacing.json"),
+    userIds: join(dir, "user-ids.json"),
+  }
 }
 
 /**

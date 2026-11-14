@@ -13,6 +13,8 @@ import { xPostRead } from "./read"
 import { MAX_POST_REF_LENGTH, MAX_QUERY_LENGTH, type PostMethod, type PostReadInput } from "./schemas"
 import { searchPosts } from "./search"
 import { threadOfPost } from "./thread"
+import { timelineOfAccount } from "./timeline"
+import { accountTimeline, accountUser, readerTimeline, timeline } from "./timeline.testing"
 import { viewPosts } from "./view"
 
 let h: SourcesFixture
@@ -33,6 +35,7 @@ const HANDLERS: Record<PostMethod, (args: PostReadInput, reader: Reader) => Prom
   mentions: mentionsOfAccount,
   conversation: conversationOfPost,
   thread: threadOfPost,
+  timeline: timelineOfAccount,
 }
 
 /** What each argument carries in these tests; a string holds a marker that no message may repeat. */
@@ -43,6 +46,7 @@ const VALUES = {
   sort: "latest",
   post: "SECRET",
   handle: "SECRET",
+  tab: "media",
   since: "SECRET",
   limit: 5,
   cursor: "SECRET",
@@ -56,15 +60,17 @@ const VALID: Record<PostMethod, PostReadInput> = {
   mentions: mentions("ada"),
   conversation: conversation("20"),
   thread: thread("20"),
+  timeline: timeline("ada"),
 }
 
 const FOREIGN: Record<PostMethod, (keyof typeof VALUES)[]> = {
-  view: ["query", "feed", "sort", "post", "handle", "since", "limit", "cursor"],
-  search: ["posts", "sort", "post", "handle", "since"],
-  quotes: ["posts", "query", "feed", "sort", "handle", "since"],
-  mentions: ["posts", "query", "feed", "sort", "post"],
-  conversation: ["posts", "query", "feed", "handle", "since", "limit"],
-  thread: ["posts", "query", "feed", "sort", "handle", "since", "limit", "cursor"],
+  view: ["query", "feed", "sort", "post", "handle", "tab", "since", "limit", "cursor"],
+  search: ["posts", "sort", "post", "handle", "tab", "since"],
+  quotes: ["posts", "query", "feed", "sort", "handle", "tab", "since"],
+  mentions: ["posts", "query", "feed", "sort", "post", "tab"],
+  conversation: ["posts", "query", "feed", "handle", "tab", "since", "limit"],
+  thread: ["posts", "query", "feed", "sort", "handle", "tab", "since", "limit", "cursor"],
+  timeline: ["posts", "query", "feed", "sort", "post", "since"],
 }
 
 const REQUIRED: Record<PostMethod, string> = {
@@ -74,6 +80,7 @@ const REQUIRED: Record<PostMethod, string> = {
   mentions: "handle",
   conversation: "post",
   thread: "post",
+  timeline: "handle",
 }
 
 /** The error `method` fails with for `args`, after checking that nothing was read. */
@@ -133,16 +140,21 @@ describe("an argument the method does not take", () => {
       const reader = readerPaging(h, data[method])
       await HANDLERS[method]({ ...VALID[method], source: "account", account: "default" }, reader)
     }
-    expect(h.accountReads).toHaveLength(5)
+    const answers = { user: accountUser(), timeline: accountTimeline([]) }
+    const reader = readerTimeline(h, answers)
+    await HANDLERS.timeline({ ...VALID.timeline, source: "account", account: "default" }, reader)
+    expect(h.accountReads).toHaveLength(7)
   })
 })
 
 describe("the handle and the day of mentions", () => {
-  test("a handle that is no handle is refused without echoing it", async () => {
-    for (const handle of ["a-b-SECRET", "a".repeat(16), "@@ada", "@", "ada writes SECRET"]) {
-      const error = (await refusal(mentions(handle))) as Error
-      expect(error.message).not.toContain("SECRET")
-      expect(error).toMatchObject({ code: "invalid_argument", message: expect.stringContaining("handle is not") })
+  test("a handle that is no handle is refused without echoing it, for mentions and timeline", async () => {
+    for (const make of [mentions, timeline]) {
+      for (const handle of ["a-b-SECRET", "a".repeat(16), "@@ada", "@", "ada writes SECRET"]) {
+        const error = (await refusal(make(handle))) as Error
+        expect(error.message).not.toContain("SECRET")
+        expect(error).toMatchObject({ code: "invalid_argument", message: expect.stringContaining("handle is not") })
+      }
     }
   })
 
@@ -176,9 +188,9 @@ describe("the handle and the day of mentions", () => {
 describe("the input schema", () => {
   const parses = (args: Record<string, unknown>) => xPostRead.input.strict().safeParse(args).success
 
-  test("every field but method is optional, and the method must be one of six", () => {
+  test("every field but method is optional, and the method must be one of seven", () => {
     for (const method of Object.keys(HANDLERS)) expect(parses({ method })).toBe(true)
-    expect(parses({ method: "timeline" })).toBe(false)
+    expect(parses({ method: "profile" })).toBe(false)
     expect(parses({})).toBe(false)
   })
 
@@ -192,6 +204,8 @@ describe("the input schema", () => {
     expect(parses({ method: "search", feed: "oldest" })).toBe(false)
     expect(parses({ method: "conversation", sort: "latest" })).toBe(true)
     expect(parses({ method: "conversation", sort: "oldest" })).toBe(false)
+    expect(parses({ method: "timeline", handle: "ada", tab: "replies" })).toBe(true)
+    expect(parses({ method: "timeline", handle: "ada", tab: "likes" })).toBe(false)
     for (const limit of [0, MAX_LIMIT + 1, 2.5]) expect(parses({ method: "search", limit })).toBe(false)
     expect(parses({ method: "search", limit: MAX_LIMIT, cursor: "c" })).toBe(true)
   })
@@ -203,10 +217,11 @@ describe("the input schema", () => {
     expect(shape.feed.description).toContain("`search`")
     for (const method of ["`quotes`", "`conversation`", "`thread`"]) expect(shape.post.description).toContain(method)
     expect(shape.sort.description).toContain("`conversation`")
-    expect(shape.handle.description).toContain("`mentions`")
+    expect(shape.handle.description).toContain("`mentions` and `timeline`")
+    expect(shape.tab.description).toContain("`timeline`")
     expect(shape.since.description).toContain("`mentions`")
-    expect(shape.limit.description).toContain("`search`, `quotes` and `mentions`")
+    expect(shape.limit.description).toContain("`search`, `quotes`, `mentions` and `timeline`")
     expect(shape.limit.description).not.toContain("`conversation`")
-    expect(shape.cursor.description).toContain("`search`, `quotes`, `mentions` and `conversation`")
+    expect(shape.cursor.description).toContain("`search`, `quotes`, `mentions`, `conversation` and `timeline`")
   })
 })

@@ -1,11 +1,15 @@
-"""The fake API: it records how it was built, holds the pool and answers `tweet_details` and `_gql_item` from a script."""
+"""The fake API: it records how it was built, holds the pool and answers `tweet_details`, `user_by_login` and
+`_gql_item` from a script."""
 
 from .accounts_pool import AccountsPool
-from .models import Tweet
+from .models import Tweet, User
 from .utils import find_obj, get_by_path
 
 OP_SearchTimeline = "vLHjqbDv7TPFMBkIIO1nOA/SearchTimeline"
 OP_TweetDetail = "dQDdKtt882nl-Km98FJGSQ/TweetDetail"
+OP_UserMedia = "iTSlWbsmD00dAE7Sk9xvIw/UserMedia"
+OP_UserTweets = "D6z-FJI2pKuwEeYYxVIGbg/UserTweets"
+OP_UserTweetsAndReplies = "FmuxExUC21Xn_C2NwtX5sQ/UserTweetsAndReplies"
 ARTICLE_FIELD_TOGGLES = {
     "withArticleRichContentState": True,
     "withArticlePlainText": False,
@@ -21,11 +25,15 @@ CONSTRUCTED: list[dict] = []
 TWEETS: dict[int, Tweet] = {}
 # The ids `tweet_details` was asked for, in order.
 TWEET_DETAILS: list[int] = []
+# The accounts `user_by_login` answers with, by handle; a handle that is not here is an account X does not show.
+USERS: dict[str, User] = {}
+# The handles `user_by_login` was asked for, in order.
+USER_LOGINS: list[str] = []
 # What `_gql_item` was asked, in order: `{"op", "kv", "ft", "toggles"}`.
 GQL_ITEMS: list[dict] = []
 # What `_gql_item` answers with: an object with `.json()`, or None as when no account is usable.
 GQL_REPLY: object | None = None
-# An exception `_gql_item` raises instead of answering.
+# An exception `_gql_item` raises instead of answering; `user_by_login`, which twscrape makes with `_gql_item`, raises it too.
 GQL_ERROR: Exception | None = None
 
 
@@ -46,6 +54,12 @@ class API:
     async def tweet_details(self, twid: int, kv=None) -> Tweet | None:
         TWEET_DETAILS.append(twid)
         return TWEETS.get(twid)
+
+    async def user_by_login(self, login: str, kv=None) -> User | None:
+        USER_LOGINS.append(login)
+        if GQL_ERROR is not None:
+            raise GQL_ERROR
+        return USERS.get(login)
 
     async def _gql_item(self, op: str, kv: dict, ft: dict | None = None, toggles: dict | None = None):
         GQL_ITEMS.append({"op": op, "kv": kv, "ft": ft, "toggles": toggles})

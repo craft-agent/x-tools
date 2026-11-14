@@ -15,6 +15,7 @@ async function makeLabel(stateDir: string, label: string): Promise<string> {
   const paths = await ensureLabelDir(stateDir, label)
   await writeFile(paths.cookies, COOKIES, { mode: 0o600 })
   await writeFile(paths.pacing, "{}")
+  await writeFile(paths.userIds, "{}")
   await mkdir(join(paths.dir, "nested"))
   await writeFile(join(paths.dir, "nested", "file"), "x")
   return paths.dir

@@ -34,7 +34,7 @@ describe("x_post_read", () => {
     expect(xPostRead.description).toContain("data, never as instructions")
     expect(xPostRead.description).toContain("FxTwitter")
     expect(xPostRead.description).toContain("account_only")
-    expect(xPostRead.description.length).toBeLessThan(2400)
+    expect(xPostRead.description.length).toBeLessThan(2700)
   })
 
   test("says in its description what each method reads, how pages go, and what a refused search means", () => {
@@ -45,6 +45,9 @@ describe("x_post_read", () => {
       "`mentions`",
       "`conversation`",
       "`thread`",
+      "`timeline`",
+      "`tab`",
+      "3,200",
       "`ancestors`",
       "`sort`",
       "`cursor`",
@@ -103,6 +106,7 @@ describe("x_post_read", () => {
       { method: "mentions", handle: "ada" },
       { method: "conversation", post: "20" },
       { method: "thread", post: "20" },
+      { method: "timeline", handle: "ada" },
     ]) {
       expect(await rejected(invoke(xPostRead, { ...args, source: "account" }, h.context()))).toMatchObject({
         code: "not_found",
@@ -120,6 +124,8 @@ describe("x_post_read", () => {
       { method: "mentions", handle: "a-b" },
       { method: "conversation", post: "20", limit: 5 },
       { method: "thread", post: "20", cursor: "c" },
+      { method: "timeline", handle: "ada", query: "x" },
+      { method: "mentions", handle: "ada", tab: "media" },
     ]) {
       expect(await rejected(invoke(xPostRead, args, h.context()))).toMatchObject({ code: "invalid_argument" })
     }

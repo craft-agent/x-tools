@@ -24,7 +24,8 @@ import {
 const STATUS_PATH = "/2/status/"
 
 export const HTTP_OK = 200
-const HTTP_UNAUTHORIZED = 401
+const HTTP_BAD_REQUEST = 400
+export const HTTP_UNAUTHORIZED = 401
 export const HTTP_NOT_FOUND = 404
 
 /** A media item of a kind this package reads. */
@@ -165,7 +166,7 @@ function statusField(body: unknown, httpStatus: number): unknown {
 }
 
 /** What a `401` came to: a `fallback` for the reading account, `protected`. */
-const PROTECTED_OUTCOME: FxOutcome<PostGone> = {
+export const PROTECTED_OUTCOME: FxOutcome<PostGone> = {
   kind: "fallback",
   reason: "protected",
   value: { status: "protected", reason: "protected" },
@@ -192,6 +193,39 @@ function goneOutcome(body: unknown): FxOutcome<PostGone> {
 }
 
 /**
+ * Reads `path` of FxTwitter and dispatches on HTTP status: `200` is an
+ * `answer` of `found(body)`; `404` is `notFound(body)`; `401` is
+ * `unauthorized(PROTECTED_OUTCOME)` when given; `400` calls `badRequest(body)`
+ * when given; anything else, a body off shape included, throws `upstream_error`
+ * (`unexpected_reply`).
+ */
+export async function readFxRoute<T>(
+  client: FxClient,
+  path: string,
+  handlers: {
+    found: (body: unknown) => T
+    notFound: (body: unknown) => FxOutcome<T>
+    unauthorized?: (outcome: FxOutcome<PostGone>) => FxOutcome<T>
+    badRequest?: (body: unknown) => never
+  },
+): Promise<FxOutcome<T>> {
+  const { status, body } = await client.get(path)
+  switch (status) {
+    case HTTP_OK:
+      return { kind: "answer", value: handlers.found(body) }
+    case HTTP_UNAUTHORIZED:
+      if (handlers.unauthorized) return handlers.unauthorized(PROTECTED_OUTCOME)
+      break
+    case HTTP_NOT_FOUND:
+      return handlers.notFound(body)
+    case HTTP_BAD_REQUEST:
+      if (handlers.badRequest) handlers.badRequest(body)
+      break
+  }
+  throw unexpectedReplyError("fxtwitter", { status })
+}
+
+/**
  * Reads `path` of FxTwitter as a post-keyed route: `200` is an `answer` of
  * what `found` makes of its body; `401` and `404` say what the post came to as
  * a single post's read does, and `gone` turns that into the value; anything
@@ -203,19 +237,14 @@ export async function readStatusRoute<T>(
   found: (body: unknown) => T,
   gone: (gone: PostGone) => T,
 ): Promise<FxOutcome<T>> {
-  const { status, body } = await client.get(path)
-  switch (status) {
-    case HTTP_OK:
-      return { kind: "answer", value: found(body) }
-    case HTTP_UNAUTHORIZED:
-      return { ...PROTECTED_OUTCOME, value: gone(PROTECTED_OUTCOME.value) }
-    case HTTP_NOT_FOUND: {
+  return readFxRoute(client, path, {
+    found,
+    unauthorized: (outcome) => ({ ...outcome, value: gone(outcome.value) }),
+    notFound: (body) => {
       const outcome = goneOutcome(body)
       return { ...outcome, value: gone(outcome.value) }
-    }
-    default:
-      throw unexpectedReplyError("fxtwitter", { status })
-  }
+    },
+  })
 }
 
 /**

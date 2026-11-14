@@ -39,6 +39,7 @@ describe("pickLabel with an account", () => {
       cookies: join(state, "accounts", "work", "cookies"),
       lock: join(state, "accounts", "work", "read.lock"),
       pacing: join(state, "accounts", "work", "pacing.json"),
+      userIds: join(state, "accounts", "work", "user-ids.json"),
     })
   })
 

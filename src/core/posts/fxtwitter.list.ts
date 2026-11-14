@@ -3,10 +3,8 @@ import { ToolError } from "../errors"
 import type { FxClient } from "../fxtwitter/client"
 import type { FxOutcome } from "../sources/choose"
 import type { Page } from "../sources/page"
-import { HTTP_NOT_FOUND, HTTP_OK, fxPost } from "./fxtwitter"
+import { HTTP_OK, fxPost, readFxRoute } from "./fxtwitter"
 import { clipCodePoints, readAtOf, unexpectedReplyError, type Post } from "./shape"
-
-const HTTP_BAD_REQUEST = 400
 
 /** The most characters of FxTwitter's own words a refusal repeats. */
 const MAX_REFUSAL_TEXT = 200
@@ -37,7 +35,7 @@ const listBodySchema = z.object({
 const refusalSchema = z.object({ message: z.string().nullish(), error: z.string().nullish() })
 
 /** The path and query string of one page: the route's fields, then `count`, then `cursor` when continuing. */
-function pagePath({ path, params }: FxListRoute, { limit, cursor }: FxListAsk): string {
+export function pagePath({ path, params }: FxListRoute, { limit, cursor }: FxListAsk): string {
   const query = new URLSearchParams({ ...params, count: String(limit) })
   if (cursor !== null) query.set("cursor", cursor)
   return `${path}?${query}`
@@ -55,7 +53,7 @@ export function nextCursor(rowCount: number, cursor: z.infer<typeof cursorFieldS
 }
 
 /** The page a `200` body holds: its statuses (other rows, such as tombstones, are skipped), at most `limit`, read as the reply arrived. */
-function pageOf(body: unknown, { limit, now }: FxListAsk): Page<Post> {
+export function pageOf(body: unknown, { limit, now }: FxListAsk): Page<Post> {
   const parsed = listBodySchema.safeParse(body)
   if (!parsed.success) throw unexpectedReplyError("fxtwitter", { status: HTTP_OK })
   const { results, cursor } = parsed.data
@@ -100,15 +98,11 @@ export async function readListFromFxTwitter(
   route: FxListRoute,
   ask: FxListAsk,
 ): Promise<FxOutcome<Page<Post>>> {
-  const { status, body } = await client.get(pagePath(route, ask))
-  switch (status) {
-    case HTTP_OK:
-      return { kind: "answer", value: pageOf(body, ask) }
-    case HTTP_NOT_FOUND:
-      return { kind: "answer", value: { items: [], cursor: null } }
-    case HTTP_BAD_REQUEST:
+  return readFxRoute(client, pagePath(route, ask), {
+    found: (body) => pageOf(body, ask),
+    notFound: () => ({ kind: "answer", value: { items: [], cursor: null } }),
+    badRequest: (body) => {
       throw refusedQueryError(body)
-    default:
-      throw unexpectedReplyError("fxtwitter", { status })
-  }
+    },
+  })
 }

@@ -13,7 +13,7 @@ import {
 } from "./schemas"
 
 /** The methods that read nothing but a page of posts, as `readPostList` does. */
-export type ListMethod = Exclude<PostMethod, "view" | "conversation" | "thread">
+export type ListMethod = Exclude<PostMethod, "view" | "conversation" | "thread" | "timeline">
 
 /** What one list method asks of the sources, once its arguments are checked. */
 export type PostList = {

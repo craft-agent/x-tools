@@ -1,8 +1,8 @@
 import type { Page } from "../sources/page"
 import type { Post, PostGone, PostLookup } from "./shape"
 
-/** What a read of a post's conversation or thread says of the post itself: its lookup status, and why it is not ok (null when it is). */
-type PostStanding = { status: PostLookup["status"]; reason: string | null }
+/** What a read of a post's conversation or thread, or of an account's timeline, says of the post or account itself: its lookup status, and why it is not ok (null when it is). */
+export type PostStanding = { status: PostLookup["status"]; reason: string | null }
 
 /** What a page of a conversation holds beside its replies: the post, and the posts it replies to (empty beyond the first page). */
 export type ConversationHead = PostStanding & { post: Post | null; ancestors: Post[] }
