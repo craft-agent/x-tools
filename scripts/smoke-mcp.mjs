@@ -11,7 +11,29 @@ const SERVER = fileURLToPath(new URL("../dist/mcp.js", import.meta.url))
 const EXIT_USAGE = 2
 const UNKNOWN_TOOL = "unknown_nonexistent_read"
 const ACCOUNT_READ = "x_account_read"
+const POST_READ = "x_post_read"
+/** A read that only the reading account may answer, so that it never reaches FxTwitter or X: none is set up in the empty state directory. */
+const POST_VIEW_ACCOUNT_ONLY = { method: "view", posts: ["20"], source: "account" }
 const stateDir = mkdtempSync(join(tmpdir(), "mcp-smoke-"))
+
+function expectReadTool(tools, name) {
+  const tool = tools.find((entry) => entry.name === name)
+  if (tool?.annotations?.readOnlyHint !== true) {
+    throw new Error(`Expected ${name} to be listed by default with readOnlyHint, got ${JSON.stringify(tool)}`)
+  }
+}
+
+function expectErrorResult(result, expectedCode, label) {
+  const [block] = result.content
+  const code = block?.type === "text" ? JSON.parse(block.text).error?.code : undefined
+  if (result.isError !== true || code !== expectedCode) {
+    throw new Error(`Expected a ${expectedCode} error result for ${label}, got ${JSON.stringify(result)}`)
+  }
+}
+
+function expectEmptyStateDir(message) {
+  if (readdirSync(stateDir).length !== 0) throw new Error(message)
+}
 
 async function listTools() {
   const client = new Client({ name: "smoke", version: "0.0.0" })
@@ -23,26 +45,23 @@ async function listTools() {
     const { tools } = await client.listTools()
     console.log(`The MCP server ${serverName} lists ${tools.length} tools.`)
 
-    const account = tools.find((tool) => tool.name === ACCOUNT_READ)
-    if (account?.annotations?.readOnlyHint !== true) {
-      throw new Error(
-        `Expected ${ACCOUNT_READ} to be listed by default with readOnlyHint, got ${JSON.stringify(account)}`,
-      )
-    }
+    expectReadTool(tools, ACCOUNT_READ)
     const read = await client.callTool({ name: ACCOUNT_READ, arguments: {} })
     const report = read.structuredContent
     if (read.isError || report?.accounts?.length !== 0 || report.engine?.status !== "missing") {
       throw new Error(`Expected no accounts and a missing engine from ${ACCOUNT_READ}, got ${JSON.stringify(read)}`)
     }
-    if (readdirSync(stateDir).length !== 0) throw new Error("Account reads must not create state.")
+    expectEmptyStateDir("Account reads must not create state.")
     console.log(`${ACCOUNT_READ} returns no accounts and a missing engine from an empty state directory.`)
 
+    expectReadTool(tools, POST_READ)
+    const view = await client.callTool({ name: POST_READ, arguments: POST_VIEW_ACCOUNT_ONLY })
+    expectErrorResult(view, "not_found", `${POST_READ} with no reading account`)
+    expectEmptyStateDir("Post reads without a reading account must not create state.")
+    console.log(`${POST_READ} view with source account gives a not_found error result and no reading account.`)
+
     const result = await client.callTool({ name: UNKNOWN_TOOL })
-    const [block] = result.content
-    const code = block?.type === "text" ? JSON.parse(block.text).error?.code : undefined
-    if (result.isError !== true || code !== "invalid_argument") {
-      throw new Error(`Expected an invalid_argument error result for ${UNKNOWN_TOOL}, got ${JSON.stringify(result)}`)
-    }
+    expectErrorResult(result, "invalid_argument", UNKNOWN_TOOL)
     console.log(`Calling ${UNKNOWN_TOOL} gives an invalid_argument error result.`)
   } finally {
     await client.close()

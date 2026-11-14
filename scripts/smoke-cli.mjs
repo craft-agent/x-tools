@@ -12,6 +12,9 @@ const EXIT_FAILED = 1
 const EXIT_USAGE = 2
 const UNKNOWN_TOOL = "unknown_nonexistent_read"
 const ACCOUNT_READ = "x_account_read"
+const POST_READ = "x_post_read"
+/** A read that only the reading account may answer, so that it never reaches FxTwitter or X: none is set up in the empty state directory. */
+const POST_VIEW_ACCOUNT_ONLY = JSON.stringify({ method: "view", posts: ["20"], source: "account" })
 const stateDir = mkdtempSync(join(tmpdir(), "cli-smoke-"))
 
 function expect(condition, message) {
@@ -45,10 +48,12 @@ async function listsTheServersTools() {
     const run = cli(["list", ...settings])
     expect(run.status === 0, `Expected exit 0 for ${label}, got ${run.status}: ${run.stderr}`)
     const listed = JSON.parse(run.stdout)
-    expect(
-      listed.some((tool) => tool.id === ACCOUNT_READ && tool.class === "read"),
-      `Expected ${label} to include ${ACCOUNT_READ} as a read tool, got ${run.stdout}`,
-    )
+    for (const id of [ACCOUNT_READ, POST_READ]) {
+      expect(
+        listed.some((tool) => tool.id === id && tool.class === "read"),
+        `Expected ${label} to include ${id} as a read tool, got ${run.stdout}`,
+      )
+    }
     const expected = await mcpToolNames(settings)
     expect(
       JSON.stringify(listed.map((tool) => tool.id)) === JSON.stringify(expected),
@@ -78,13 +83,23 @@ function readsEmptyAccounts() {
   console.log(`${ACCOUNT_READ} returns no accounts and a missing engine from an empty state directory.`)
 }
 
-function rejectsAnUnknownTool() {
-  const run = cli(["run", UNKNOWN_TOOL, "--cwd", process.cwd()], "{}")
+function expectCliRunError(tool, input, expectedCode, label) {
+  const run = cli(["run", tool, "--cwd", process.cwd()], input)
   const code = JSON.parse(run.stdout).error?.code
   expect(
-    run.status === EXIT_FAILED && code === "invalid_argument",
-    `Expected exit ${EXIT_FAILED} and invalid_argument for ${UNKNOWN_TOOL}, got ${run.status}: ${run.stdout}`,
+    run.status === EXIT_FAILED && code === expectedCode,
+    `Expected exit ${EXIT_FAILED} and ${expectedCode} for ${label}, got ${run.status}: ${run.stdout}${run.stderr}`,
   )
+}
+
+function viewsNoPostWithoutAReadingAccount() {
+  expectCliRunError(POST_READ, POST_VIEW_ACCOUNT_ONLY, "not_found", `${POST_READ} with no reading account`)
+  expect(readdirSync(stateDir).length === 0, "Post reads without a reading account must not create state")
+  console.log(`${POST_READ} view with source account exits ${EXIT_FAILED} with not_found and no reading account.`)
+}
+
+function rejectsAnUnknownTool() {
+  expectCliRunError(UNKNOWN_TOOL, "{}", "invalid_argument", UNKNOWN_TOOL)
   console.log(`run ${UNKNOWN_TOOL} exits ${EXIT_FAILED} with invalid_argument.`)
 }
 
@@ -98,6 +113,7 @@ function rejectsConfirm() {
 try {
   await listsTheServersTools()
   readsEmptyAccounts()
+  viewsNoPostWithoutAReadingAccount()
   rejectsAnUnknownTool()
   rejectsConfirm()
 } catch (error) {

@@ -14,9 +14,9 @@ export const PROJECT = {
   /** Every setting's environment variable is `<envPrefix>_<SETTING>`. */
   envPrefix: "X_TOOLS",
   /** The toolsets, in the order `all` lists them. */
-  toolsets: ["account"] as readonly string[],
+  toolsets: ["account", "posts"] as readonly string[],
   /** The toolsets on when a setting names none. */
-  defaultToolsets: ["account"] as readonly string[],
+  defaultToolsets: ["account", "posts"] as readonly string[],
   /** The package's own settings, which the tools themselves read: each snake_case name and its type, with bounds when it needs them. */
   options: {
     state_dir: "path",
