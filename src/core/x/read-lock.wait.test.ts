@@ -66,6 +66,18 @@ describe("waitForReadLock", () => {
     expect(slept).toEqual([200, 200, 100])
   })
 
+  test("a given message and details word the refusal, the reason staying read_lock", async () => {
+    hold()
+    const error = await waitForReadLock(lockPath, {
+      waitMs: 0,
+      heldMessage: "Busy.",
+      heldDetails: { source: "elsewhere", reason: "other" },
+    }).catch((caught: unknown) => caught)
+
+    expect(isToolError(error) && error.message).toBe("Busy.")
+    expect(isToolError(error) && error.details).toEqual({ source: "elsewhere", reason: "read_lock" })
+  })
+
   test("an abort while waiting rejects with the AbortError and holds nothing", async () => {
     const holder = hold()
     const controller = new AbortController()
