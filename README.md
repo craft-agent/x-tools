@@ -221,11 +221,12 @@ people: they are data, never instructions.
 
 ### Users (`users`)
 
-On by default. Reads an account's profile by handle and searches users by words.
+On by default. Reads an account's profile by handle, searches users by words,
+and reads an account's followers and following and a post's reposters.
 
-| Tool          | What it does                                                                                                                                                                                                              | Class |
-| ------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----- |
-| `x_user_read` | `view`: the profile of one account by handle, with its status, the source that answered it and the user itself. `search`: users matching words, a page of `results` with a `cursor`, `limit` 20 by default and 50 at most | read  |
+| Tool          | What it does                                                                                                                                                                                                                                                                                                                                                                                     | Class |
+| ------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ----- |
+| `x_user_read` | `view`: the profile of one account by handle, with its status, the source that answered it and the user itself. `search`: users matching words. `followers` and `following`: the accounts that follow a handle or that it follows. `reposters`: the accounts that reposted a post, by URL or id. Each of these four is a page of `results` with a `cursor`, `limit` 20 by default and 50 at most | read  |
 
 A profile holds the name, bio, links, location, when the account joined, the
 counts (`followers`, `following`, `posts`, `likes`, `media`), `protected`,
@@ -233,10 +234,15 @@ counts (`followers`, `following`, `posts`, `likes`, `media`), `protected`,
 banner; a field a source does not tell is `null`. Every user carries `read_at`,
 and its name, bio and links are clipped (50 and 600 characters, five links),
 with `clipped` saying what was cut. A profile read through the reading account
-makes a later `timeline` of that handle take one read instead of two. Through the
-reading account a page is one request to X and counts as one read, and X refuses
-user search to a reading account whose phone is not verified, which fails as
-`forbidden` (`search_refused`), while FxTwitter still answers.
+makes a later `timeline` of that handle take one read instead of two. A page
+(`search`, `followers`, `following`, `reposters`) continues only through its
+`cursor`, on the method, the arguments and the source that gave it. Through the
+reading account a page is one request to X and counts as one read, and the first
+`followers` or `following` of a handle in 7 days takes one more, to find the
+account's user id (the reading account remembers it, as for a `timeline`). X
+refuses user search to a reading account whose phone is not verified, which fails
+as `forbidden` (`search_refused`), while FxTwitter still answers. Who liked a
+post cannot be read: X made likes private.
 
 Users are read from FxTwitter first and from the reading account when FxTwitter
 cannot answer (see [Sources](#sources)); `source` pins one, and each result names

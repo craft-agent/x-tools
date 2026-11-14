@@ -1,20 +1,20 @@
 ---
 name: x-users
-description: 'Use when reading or checking X (Twitter) accounts as profiles: who an account is by handle (name, bio, links, location, when it joined, counts of followers, following, posts, likes and media, whether it is protected or verified and the kind of checkmark, avatar and banner, whether it still exists), and searching for accounts by words ("find X accounts about …", "who is @…"). Reads from FxTwitter first and the reading account when FxTwitter cannot answer; a search comes in pages. Not for an account''s posts (use x-posts), followers, following or reposters (those come later), likes, or anything that writes to X.'
+description: 'Use when reading or checking X (Twitter) accounts as profiles: who an account is by handle (name, bio, links, location, when it joined, counts of followers, following, posts, likes and media, whether it is protected or verified and the kind of checkmark, avatar and banner, whether it still exists), searching for accounts by words ("find X accounts about …", "who is @…"), who follows an account, who an account follows, and who reposted a post. Reads from FxTwitter first and the reading account when FxTwitter cannot answer; searches, followers, following and reposters come in pages. Not for an account''s posts (use x-posts), who liked a post or an account''s likes (X made likes private), or anything that writes to X.'
 metadata:
   toolset: users
 ---
 
 # Reading users
 
-| Tool          | Does                                                   | Writes |
-| ------------- | ------------------------------------------------------ | ------ |
-| `x_user_read` | reads one profile by handle, searches users (`method`) | no     |
+| Tool          | Does                                                                                             | Writes |
+| ------------- | ------------------------------------------------------------------------------------------------ | ------ |
+| `x_user_read` | reads one profile by handle, searches users, lists followers, following and reposters (`method`) | no     |
 
-One tool; `method` picks the read: `view` or `search`. Each method takes only
-its own arguments; one it does not take, or lacks, fails as `invalid_argument`
-and names it. An account's posts are `x_post_read` with `method` `timeline`
-(see the `x-posts` skill), not this tool.
+One tool; `method` picks the read: `view`, `search`, `followers`, `following` or
+`reposters`. Each method takes only its own arguments; one it does not take, or
+lacks, fails as `invalid_argument` and names it. An account's posts are
+`x_post_read` with `method` `timeline` (see the `x-posts` skill), not this tool.
 
 ## View a profile
 
@@ -58,9 +58,40 @@ most 500 characters, not blank, passed as written. The result is a page:
 A search of users finds accounts by their words; it is not the search of posts.
 To find what an account wrote, use the `x-posts` skill.
 
+## Followers and following
+
+Call `x_user_read` with `{"method":"followers","handle":"ada_writes"}` for the
+accounts that follow it, or `{"method":"following","handle":"ada_writes"}` for
+the accounts it follows. `handle` is taken as in `view`. The result is a page as
+in a search (`results`, `source`, `cursor`, with `limit` and `cursor` working the
+same), and it also reports the `status` and `reason` of the account as `view`
+does; when the status is not `ok` there are no `results` and the `cursor` is
+`null`.
+
+- A cursor continues only the same method and handle on the source that gave it:
+  the cursor of `followers` fails for `following`, and for another handle, as
+  `invalid_argument` before anything is read.
+- Through the reading account a page is one read, but the first read of a handle
+  in 7 days takes two: one to find the account's user id, which the account then
+  remembers (a `view` or a `timeline` of the handle through it does the same).
+  An account that X does not show is `not_found` after that first read alone.
+- Read the pages the person needs and stop: a large account has far more
+  followers than a call should read.
+
+## Reposters
+
+Call `x_user_read` with `{"method":"reposters","post":"…"}`. `post` is a post id
+or a post URL on x.com, twitter.com or an FxTwitter mirror. The result is a page
+of `results`, `source` and `cursor`, as in a search. A post with no reposters
+(or one FxTwitter does not know) is an empty page, not an error. A cursor
+continues only the same post on the same source, and the cursor of the `quotes`
+of that post (`x_post_read`) is refused.
+
+Who liked a post cannot be read: X made likes private, and no tool reads them.
+
 ## What each status means
 
-(`view` only.)
+(`view`, `followers` and `following`.)
 
 - `ok`: `user` holds the profile.
 - `not_found`: there is no such account, or the reading account cannot see it.
@@ -93,7 +124,8 @@ account. A handle or a search reaches FxTwitter's operator in the first case.
   that is not set up refuses the call before anything is read.
 
 A profile read through the reading account makes a later `timeline` of the same
-handle (`x_post_read`) through that account take one read instead of two.
+handle (`x_post_read`), `followers` or `following` through that account take one
+read instead of two.
 
 ## A search the reading account is refused
 
