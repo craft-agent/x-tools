@@ -22,6 +22,9 @@ const ENGINE_DIR = "engine"
 /** The directory of the state root that holds FxTwitter's pacing. */
 const FXTWITTER_DIR = "fxtwitter"
 
+/** What a call is told when it needs a reading account and none is set up. */
+export const NO_ACCOUNT_MESSAGE = "No reading account is set up yet."
+
 function quoteBadLabel(value: string): string {
   const truncated = value.length > MAX_BAD_LABEL_PREVIEW ? `${value.slice(0, MAX_BAD_LABEL_PREVIEW)}…` : value
   return JSON.stringify(truncated)
@@ -132,7 +135,7 @@ export async function pickLabel(stateDir: string, account?: string): Promise<Lab
   }
 
   if (labels.length === 0) {
-    throw new ToolError("not_found", "No reading account is set up yet.", { details })
+    throw new ToolError("not_found", NO_ACCOUNT_MESSAGE, { details })
   }
   if (labels.length > 1) {
     throw new ToolError(

@@ -5,7 +5,7 @@ import { fxPaceSettings } from "../fxtwitter/pacing"
 import type { Connect } from "../fxtwitter/transport"
 import { requireRuntime } from "../runtime"
 import type { ToolContext } from "../tool"
-import { listLabels } from "../x/labels"
+import { listLabels, pickLabel } from "../x/labels"
 import { DEFAULT_LOCK_WAIT_MS } from "../x/read-lock"
 import { readX, type ReadOptions } from "../x/read"
 import { accountOnly } from "./source"
@@ -44,6 +44,8 @@ export type Reader = {
   fxtwitter(): FxClient
   /** Whether at least one reading account is set up; asked once. */
   hasAccount(): Promise<boolean>
+  /** Throws as a read of `account` would when the label is not one, is not set up, or is left out among several; reads local state only. */
+  checkAccount(account?: string): Promise<void>
   /** One read of X through the reading account `account` (the only one when left out), after the budget check. */
   account(op: string, args: Readonly<Record<string, unknown>>, account?: string): Promise<AccountAnswer>
 }
@@ -107,6 +109,9 @@ export function createReader(ctx: ToolContext, overrides: ReaderOverrides = {}):
     checkBudget,
     fxtwitter: () => (client ??= makeClient()),
     hasAccount: () => (accountExists ??= listLabels(stateDir).then((labels) => labels.length > 0)),
+    async checkAccount(account) {
+      await pickLabel(stateDir, account)
+    },
     async account(op, args, account) {
       checkBudget()
       const { ownDir } = ctx

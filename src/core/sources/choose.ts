@@ -25,7 +25,8 @@ export type Sourced<T> = { source: Answerer; value: T }
 
 const NOT_OFFERED_MESSAGE = "FxTwitter does not offer this read; use source auto or account."
 
-const ACCOUNT_ONLY_MESSAGE =
+/** Why `source: fxtwitter` fails under the `account_only` setting. */
+export const ACCOUNT_ONLY_MESSAGE =
   "FxTwitter is turned off by the account_only setting; use source auto or account, or turn the setting off."
 
 /** Whether `error` says FxTwitter itself is down or limiting the package, which the reading account may answer instead. */
