@@ -3,6 +3,7 @@ import type { FxClient } from "../fxtwitter/client"
 import type { FxOutcome } from "../sources/choose"
 import {
   MEDIA_TYPES,
+  POST_NOT_FOUND,
   assertPostId,
   clipPost,
   isoUtc,
@@ -16,6 +17,7 @@ import {
   type Media,
   type Post,
   type Quote,
+  type PostGone,
   type PostLookup,
 } from "./shape"
 
@@ -162,11 +164,18 @@ function statusField(body: unknown, httpStatus: number): unknown {
   return body.status
 }
 
+/** What a `401` came to: a `fallback` for the reading account, `protected`. */
+const PROTECTED_OUTCOME: FxOutcome<PostGone> = {
+  kind: "fallback",
+  reason: "protected",
+  value: { status: "protected", reason: "protected" },
+}
+
 /** What a `404` came to: `not_found` for a post that is gone for good, the reading account's to try for the rest. */
-function goneOutcome(body: unknown): FxOutcome<PostLookup> {
+function goneOutcome(body: unknown): FxOutcome<PostGone> {
   const gone = statusField(body, HTTP_NOT_FOUND)
   // A bare 404 is also how FxTwitter reports a fetch it failed; it is final all the same.
-  if (gone === null) return { kind: "answer", value: { status: "not_found", reason: "not_found" } }
+  if (gone === null) return { kind: "answer", value: POST_NOT_FOUND }
   const tombstone = goneSchema.safeParse(gone)
   if (!tombstone.success) throw unexpectedReplyError("fxtwitter", { status: HTTP_NOT_FOUND })
   const { reason } = tombstone.data
@@ -179,6 +188,33 @@ function goneOutcome(body: unknown): FxOutcome<PostLookup> {
     case "blocked":
     case "unavailable":
       return { kind: "fallback", reason: "logged_out", value: { status: "unavailable", reason } }
+  }
+}
+
+/**
+ * Reads `path` of FxTwitter as a post-keyed route: `200` is an `answer` of
+ * what `found` makes of its body; `401` and `404` say what the post came to as
+ * a single post's read does, and `gone` turns that into the value; anything
+ * else, a body off shape included, is `upstream_error` (`unexpected_reply`).
+ */
+export async function readStatusRoute<T>(
+  client: FxClient,
+  path: string,
+  found: (body: unknown) => T,
+  gone: (gone: PostGone) => T,
+): Promise<FxOutcome<T>> {
+  const { status, body } = await client.get(path)
+  switch (status) {
+    case HTTP_OK:
+      return { kind: "answer", value: found(body) }
+    case HTTP_UNAUTHORIZED:
+      return { ...PROTECTED_OUTCOME, value: gone(PROTECTED_OUTCOME.value) }
+    case HTTP_NOT_FOUND: {
+      const outcome = goneOutcome(body)
+      return { ...outcome, value: gone(outcome.value) }
+    }
+    default:
+      throw unexpectedReplyError("fxtwitter", { status })
   }
 }
 
@@ -205,18 +241,10 @@ export async function readPostFromFxTwitter(
   now: () => number,
 ): Promise<FxOutcome<PostLookup>> {
   assertPostId(id)
-  const { status, body } = await client.get(`${STATUS_PATH}${id}`)
-  switch (status) {
-    case HTTP_OK:
-      return {
-        kind: "answer",
-        value: { status: "ok", post: postFrom(statusField(body, status), readAtOf(now()), status) },
-      }
-    case HTTP_UNAUTHORIZED:
-      return { kind: "fallback", reason: "protected", value: { status: "protected", reason: "protected" } }
-    case HTTP_NOT_FOUND:
-      return goneOutcome(body)
-    default:
-      throw unexpectedReplyError("fxtwitter", { status })
-  }
+  return readStatusRoute<PostLookup>(
+    client,
+    `${STATUS_PATH}${id}`,
+    (body) => ({ status: "ok", post: postFrom(statusField(body, HTTP_OK), readAtOf(now()), HTTP_OK) }),
+    (gone) => gone,
+  )
 }

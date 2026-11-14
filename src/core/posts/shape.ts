@@ -223,3 +223,9 @@ export function clipPost(raw: RawPost): Post {
 /** What a lookup of one post came to: the post, or why there is none. */
 export type PostLookup =
   { status: "ok"; post: Post } | { status: "not_found" | "protected" | "unavailable"; reason: string }
+
+/** A lookup that found no post: the status and why. */
+export type PostGone = Exclude<PostLookup, { status: "ok" }>
+
+/** The outcome of a lookup that found no post. */
+export const POST_NOT_FOUND: PostGone = { status: "not_found", reason: "not_found" }
