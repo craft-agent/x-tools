@@ -514,6 +514,11 @@ async def read_users_page(
     return paged_items(api, timeline, users, count, "users", user_of)
 
 
+def with_cursor(variables: dict, cursor: str | None) -> dict:
+    """`variables` with `cursor` added when one is given."""
+    return {**variables, "cursor": cursor} if cursor is not None else variables
+
+
 def search_variables(args: dict, product: str) -> dict:
     """The variables of a SearchTimeline request for `args` (a query, a count and a cursor) in `product`."""
     variables = {
@@ -522,9 +527,7 @@ def search_variables(args: dict, product: str) -> dict:
         "product": product,
         "querySource": SEARCH_QUERY_SOURCE,
     }
-    if args["cursor"] is not None:
-        variables["cursor"] = args["cursor"]
-    return variables
+    return with_cursor(variables, args["cursor"])
 
 
 @contextlib.contextmanager
@@ -664,12 +667,13 @@ async def read_conversation(api: Any, args: dict) -> dict | None:
     None once a page holds no reply.
     """
     api_module = importlib.import_module(f"{TWSCRAPE}.api")
-    variables = {
-        **detail_variables(args["id"], CONVERSATION_REFERRER, with_rux_injections=True),
-        "rankingMode": args["ranking"],
-    }
-    if args["cursor"] is not None:
-        variables["cursor"] = args["cursor"]
+    variables = with_cursor(
+        {
+            **detail_variables(args["id"], CONVERSATION_REFERRER, with_rux_injections=True),
+            "rankingMode": args["ranking"],
+        },
+        args["cursor"],
+    )
     toggles = getattr(api_module, "ARTICLE_FIELD_TOGGLES", None)
     timeline, tweets = await read_detail_page(api, variables, toggles=toggles)
     focal = focal_of(tweets, args["id"])
@@ -788,9 +792,10 @@ async def read_timeline(api: Any, args: dict) -> dict:
     """
     tab = args["tab"]
     operation_id = getattr(importlib.import_module(f"{TWSCRAPE}.api"), TIMELINE_OPERATIONS[tab])
-    variables = {"userId": args["user_id"], "count": args["count"], **TIMELINE_VARIABLES[tab]}
-    if args["cursor"] is not None:
-        variables["cursor"] = args["cursor"]
+    variables = with_cursor(
+        {"userId": args["user_id"], "count": args["count"], **TIMELINE_VARIABLES[tab]},
+        args["cursor"],
+    )
     timeline, tweets = await request_page(api, operation_id, variables, toggles=TIMELINE_TOGGLES.get(tab))
     if tab == "media":
         tweets = [tweet for tweet in tweets if has_media(tweet)]
@@ -822,11 +827,6 @@ def check_reposters_args(args: dict) -> None:
     check_post_args(args)
     check_count_arg(args["count"])
     check_cursor_arg(args["cursor"])
-
-
-def with_cursor(variables: dict, cursor: str | None) -> dict:
-    """`variables` with `cursor` added when one is given."""
-    return {**variables, "cursor": cursor} if cursor is not None else variables
 
 
 @operation("follows", check_args=check_follows_args)
