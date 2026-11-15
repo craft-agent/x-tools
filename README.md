@@ -283,6 +283,23 @@ description and rules are clipped as a profile's are, and `clipped` says what
 was cut. A community X does not give, missing or removed, fails as
 `not_found`.
 
+### Trends (`trends`)
+
+On by default. Reads what X's Explore lists.
+
+| Tool           | What it does                                                                                                                              | Class |
+| -------------- | ----------------------------------------------------------------------------------------------------------------------------------------- | ----- |
+| `x_trend_read` | `explore`: a page of trends in a `category`, `trending` (the default), `news`, `sports` or `entertainment`, with the words to search each | read  |
+
+`trending` reads FxTwitter first, one page of at most 50 with no cursor, and
+the reading account when FxTwitter gives none; the other categories read only
+through the reading account, paged. Each trend has its `name`, `rank`,
+`context`, `grouped` topics, `query` (what to pass to `x_post_read` `search`),
+`url`, whether it is a `story` (X's written summary of a topic), `read_at` and
+`clipped`. No post count is given: neither source reports one as a value. X
+lists trends for the place it places the reader in, so FxTwitter's and the
+reading account's may differ; `source` tells which answered.
+
 ### Grants (`grants`)
 
 Off by default. Delegates bounded writes for jobs where no person can answer.

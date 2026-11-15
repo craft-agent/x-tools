@@ -82,7 +82,7 @@ try {
     JSON.stringify(registered) === JSON.stringify(expected),
     `Expected setup to register ${JSON.stringify(expected)}, got ${JSON.stringify(registered)}.`,
   )
-  for (const id of ["x-account", "x-posts", "x-users", "x-lists", "x-communities"]) {
+  for (const id of ["x-account", "x-posts", "x-users", "x-lists", "x-communities", "x-trends"]) {
     expect(skills.includes(id), `Expected setup to register ${id}, got ${JSON.stringify(skills)}.`)
   }
   console.log(`setup registers ${added.size} tools (as many as the MCP server lists) and ${skills.length} skills.`)
