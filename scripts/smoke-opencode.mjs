@@ -3,7 +3,15 @@ import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { fileURLToPath, pathToFileURL } from "node:url"
 import { PLUGIN_NAME } from "./package-name.mjs"
-import { ACCOUNT_ONLY_READS, ACCOUNT_READ, POST_READ, USER_READ, expect, mcpToolNames } from "./smoke-shared.mjs"
+import {
+  ACCOUNT_ONLY_READS,
+  ACCOUNT_READ,
+  LIST_READ,
+  POST_READ,
+  USER_READ,
+  expect,
+  mcpToolNames,
+} from "./smoke-shared.mjs"
 
 const PLUGIN = fileURLToPath(new URL("../dist/opencode.js", import.meta.url))
 const NO_ACCOUNT_ERROR = /^not_found: No reading account is set up yet\./
@@ -49,7 +57,7 @@ try {
   console.log(`The OpenCode plugin ${plugin.id} exports setup and server.`)
 
   const expected = (await mcpToolNames(stateDir)).sort()
-  for (const name of [ACCOUNT_READ, POST_READ, USER_READ]) {
+  for (const name of [ACCOUNT_READ, POST_READ, USER_READ, LIST_READ]) {
     expect(expected.includes(name), `Expected the MCP registry to include ${name}.`)
   }
 
