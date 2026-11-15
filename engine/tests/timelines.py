@@ -87,3 +87,23 @@ def list_page(timeline_key: str, *entries: dict) -> Reply:
     """A list's page whose `timeline_key` timeline lists `entries` in one `TimelineAddEntries` instruction."""
     instructions = [{"type": "TimelineAddEntries", "entries": list(entries)}]
     return Reply({"data": {"list": {timeline_key: {"timeline": {"instructions": instructions}}}}})
+
+
+def community_reply(result: object) -> Reply:
+    """A reply whose `data.communityResults.result` is `result`."""
+    return Reply({"data": {"communityResults": {"result": result}}})
+
+
+def community_timeline_page(*entries: dict, key: str = "ranked_community_timeline") -> Reply:
+    """A community's page whose `key` timeline lists `entries` in one `TimelineAddEntries` instruction."""
+    instructions = [{"type": "TimelineAddEntries", "entries": list(entries)}]
+    return community_reply({"__typename": "Community", "rest_id": "1", key: {"timeline": {"instructions": instructions}}})
+
+
+def members_slice_page(*user_ids: int, next_cursor: object = None) -> Reply:
+    """A community's members as X writes them: `items_results` of users with no entry ids, and `slice_info`."""
+    slice_ = {
+        "items_results": [{"result": {"__typename": "User", "rest_id": str(id)}} for id in user_ids],
+        "slice_info": {"next_cursor": next_cursor},
+    }
+    return community_reply({"__typename": "Community", "rest_id": "1", "members_slice": slice_})
