@@ -152,6 +152,30 @@ LIST_ARGS = frozenset({"id", "count", "cursor"})
 LIST_POSTS_TOGGLES = {"withArticleRichContentState": False}
 LIST_POSTS_KEY = "tweets_timeline"
 LIST_MEMBERS_KEY = "members_timeline"
+# The arguments of `community`, `community_posts` and `community_members`, and what each sends beside the community id
+# (twscrape keeps the variables and features inside `community_info_raw`, `community_tweets_raw` and
+# `community_members_raw`).
+COMMUNITY_ARGS = frozenset({"id"})
+COMMUNITY_POSTS_ARGS = frozenset({"id", "ranking", "count", "cursor"})
+COMMUNITY_MEMBERS_ARGS = frozenset({"id", "count", "cursor"})
+COMMUNITY_RANKINGS = ("Relevance", "Recency")
+COMMUNITY_FEATURES = {"c9s_list_members_action_api_enabled": False, "c9s_superc9s_indication_enabled": False}
+COMMUNITY_POSTS_VARIABLES = {
+    "displayLocation": "Community",
+    "withCommunity": True,
+    "includePromotedContent": False,
+    "withQuickPromoteEligibilityTweetFields": True,
+    "withVoice": True,
+    "withV2Timeline": True,
+}
+COMMUNITY_MEMBERS_VARIABLES = {"includePromotedContent": False}
+# What a community's reply holds: the `__typename`s of its result, and where its posts (the key differs by ranking, one
+# of them unverified) and its members are.
+COMMUNITY_TYPENAME = "Community"
+COMMUNITY_UNAVAILABLE = "CommunityUnavailable"
+COMMUNITY_TIMELINE_KEYS = ("ranked_community_timeline", "community_timeline")
+COMMUNITY_MEMBERS_KEY = "members_slice"
+COMMUNITY_PARSE_MESSAGE = "X's reply holds a community the bridge cannot read"
 # The twscrape operation each direction of `follows` reads (`followers_raw`, `following_raw`), the variables each
 # sends beside `userId` and `count` (twscrape keeps them inside the function), and the features of the one that sends any.
 FOLLOWS_OPERATIONS = {"followers": "OP_Followers", "following": "OP_Following"}
@@ -490,6 +514,18 @@ def in_timeline_order(
     return [*ordered, *by_id.values()]
 
 
+async def request_reply(
+    api: Any, operation_id: str, variables: dict, ft: dict | None = None, toggles: dict | None = None
+) -> Any:
+    """The reply of one `_gql_item` request; raises `NoAccountError` when no account answers."""
+    rep = await api._gql_item(operation_id, variables, ft=ft, toggles=toggles)
+    if rep is None:
+        raise importlib.import_module(TWSCRAPE).NoAccountError(
+            f"No account available for queue {operation_id.split('/')[-1]}"
+        )
+    return rep
+
+
 async def request_page(
     api: Any,
     operation_id: str,
@@ -501,11 +537,7 @@ async def request_page(
     with_module_items: bool = False,
 ) -> tuple[dict, list[Any]]:
     """The timeline and parsed items (in timeline order) of one `_gql_item` request; raises `NoAccountError` when none."""
-    rep = await api._gql_item(operation_id, variables, ft=ft, toggles=toggles)
-    if rep is None:
-        raise importlib.import_module(TWSCRAPE).NoAccountError(
-            f"No account available for queue {operation_id.split('/')[-1]}"
-        )
+    rep = await request_reply(api, operation_id, variables, ft=ft, toggles=toggles)
     timeline = rep.json()
     parser = parse or importlib.import_module(f"{TWSCRAPE}.models").parse_tweets
     return timeline, in_timeline_order(api, timeline, list(parser(rep)), entry_id, with_module_items)
@@ -941,6 +973,183 @@ async def read_list_members(api: Any, args: dict) -> dict | None:
     operation_id = importlib.import_module(f"{TWSCRAPE}.api").OP_ListMembers
     variables = with_cursor({"listId": args["id"], "count": args["count"]}, args["cursor"])
     return await read_users_page(api, operation_id, variables, args["count"], list_key=LIST_MEMBERS_KEY)
+
+
+def check_community_args(args: dict) -> None:
+    """Raises `Failure("invalid_request")` unless `args` holds exactly a community id.
+
+    The messages name the argument and never repeat its value.
+    """
+    if set(args) != COMMUNITY_ARGS:
+        raise Failure("invalid_request", "args does not hold exactly id")
+    check_id_arg(args["id"], "id", "community id")
+
+
+def check_community_posts_args(args: dict) -> None:
+    """Raises `Failure("invalid_request")` unless `args` holds exactly a community id, a ranking, a count and a cursor.
+
+    The messages name the argument and never repeat its value.
+    """
+    if set(args) != COMMUNITY_POSTS_ARGS:
+        raise Failure("invalid_request", "args does not hold exactly id, ranking, count and cursor")
+    ranking = args["ranking"]
+    check_id_arg(args["id"], "id", "community id")
+    if not isinstance(ranking, str) or ranking not in COMMUNITY_RANKINGS:
+        raise Failure("invalid_request", f"args.ranking is not one of {', '.join(COMMUNITY_RANKINGS)}")
+    check_count_arg(args["count"])
+    check_cursor_arg(args["cursor"])
+
+
+def check_community_members_args(args: dict) -> None:
+    """Raises `Failure("invalid_request")` unless `args` holds exactly a community id, a count and a cursor.
+
+    The messages name the argument and never repeat its value.
+    """
+    if set(args) != COMMUNITY_MEMBERS_ARGS:
+        raise Failure("invalid_request", "args does not hold exactly id, count and cursor")
+    check_id_arg(args["id"], "id", "community id")
+    check_count_arg(args["count"])
+    check_cursor_arg(args["cursor"])
+
+
+def community_parse_error() -> Exception:
+    """The failure for a community reply the bridge cannot read; its message names no value."""
+    return getattr(importlib.import_module(TWSCRAPE), PARSE_ERRORS[0])(COMMUNITY_PARSE_MESSAGE)
+
+
+def community_result_of(reply: Any) -> dict | None:
+    """`data.communityResults.result` of X's `reply`; None when it is missing, empty or a `CommunityUnavailable`.
+
+    Raises the parse failure when the result is of a type other than `Community` and `CommunityUnavailable`.
+    """
+    node = reply
+    for key in ("data", "communityResults", "result"):
+        node = node.get(key) if isinstance(node, dict) else None
+    if not isinstance(node, dict) or not node or node.get("__typename") == COMMUNITY_UNAVAILABLE:
+        return None
+    if node.get("__typename", COMMUNITY_TYPENAME) != COMMUNITY_TYPENAME:
+        raise community_parse_error()
+    return node
+
+
+def community_field(source: dict, name: str, kind: type, required: bool = False) -> Any:
+    """`source[name]` when it is a `kind` (a bool is no int); None when absent or null unless `required`.
+
+    Raises the parse failure for a value of another type, and for a missing one that is `required`.
+    """
+    value = source.get(name)
+    if value is None and not required:
+        return None
+    if not isinstance(value, kind) or isinstance(value, bool) != (kind is bool):
+        raise community_parse_error()
+    return value
+
+
+def community_created_at(source: dict) -> str | None:
+    """The ISO 8601 UTC moment (to the second) of `source`'s `created_at`, which X gives in milliseconds since the epoch."""
+    created = community_field(source, "created_at", int)
+    if created is None:
+        return None
+    try:
+        return iso_utc(datetime.fromtimestamp(created // MILLISECONDS, timezone.utc))
+    except (OverflowError, OSError, ValueError):
+        raise community_parse_error() from None
+
+
+def community_of(result: dict) -> dict:
+    """The compact dict of a community's `result`; raises the parse failure for a field of the wrong type."""
+    topic = community_field(result, "primary_community_topic", dict)
+    rules = community_field(result, "rules", list) or []
+    if not all(isinstance(rule, dict) for rule in rules):
+        raise community_parse_error()
+    return {
+        "id": community_field(result, "rest_id", str, required=True),
+        "name": community_field(result, "name", str, required=True),
+        "description": community_field(result, "description", str) or "",
+        "rules": [
+            {
+                "name": community_field(rule, "name", str, required=True),
+                "description": community_field(rule, "description", str),
+            }
+            for rule in rules
+        ],
+        "member_count": community_field(result, "member_count", int),
+        "join_policy": community_field(result, "join_policy", str),
+        "topic": community_field(topic, "topic_name", str) if topic else None,
+        "nsfw": community_field(result, "is_nsfw", bool),
+        "created_at": community_created_at(result),
+        "is_member": community_field(result, "is_member", bool),
+    }
+
+
+@operation("community", check_args=check_community_args)
+async def read_community(api: Any, args: dict) -> dict | None:
+    """One community's details, or None when X gives no such community.
+
+    The one request is made here, with the variables and features twscrape's `community_info` sends. None means X
+    gave no such community to this account.
+    """
+    operation_id = importlib.import_module(f"{TWSCRAPE}.api").OP_CommunityQuery
+    rep = await request_reply(api, operation_id, {"communityId": args["id"]}, ft=COMMUNITY_FEATURES)
+    result = community_result_of(rep.json())
+    return community_of(result) if result is not None else None
+
+
+@operation("community_posts", check_args=check_community_posts_args)
+async def read_community_posts(api: Any, args: dict) -> dict | None:
+    """One page of a community's posts: `{"posts": [...], "cursor": str | None}`, or None when X gives no such community.
+
+    The one request is made here, with the variables twscrape's `community_tweets` sends (but for `count`): twscrape
+    pages inside a generator. The posts are those X lists, in the order it lists them, as many as `count`; a page
+    without posts has no cursor. None means X gave no such community to this account.
+    """
+    operation_id = importlib.import_module(f"{TWSCRAPE}.api").OP_CommunityTweetsTimeline
+    variables = with_cursor(
+        {
+            "communityId": args["id"],
+            "count": args["count"],
+            "rankingMode": args["ranking"],
+            **COMMUNITY_POSTS_VARIABLES,
+        },
+        args["cursor"],
+    )
+    timeline, tweets = await request_page(api, operation_id, variables)
+    result = community_result_of(timeline)
+    if result is None or not any(isinstance(result.get(key), dict) for key in COMMUNITY_TIMELINE_KEYS):
+        return None
+    return paged_posts(api, timeline, tweets, args["count"])
+
+
+@operation("community_members", check_args=check_community_members_args)
+async def read_community_members(api: Any, args: dict) -> dict | None:
+    """One page of a community's members: `{"users": [...], "cursor": str | None}`, or None when X gives no such community.
+
+    The one request is made here, with the variables twscrape's `community_members` sends (but for `count`): twscrape
+    pages inside a generator. The users are those X lists in `members_slice`, in the order it lists them, as many as
+    `count`; a page without users has no cursor. None means X gave no such community to this account.
+    """
+    operation_id = importlib.import_module(f"{TWSCRAPE}.api").OP_membersSliceTimeline_Query
+    variables = with_cursor(
+        {"communityId": args["id"], "count": args["count"], **COMMUNITY_MEMBERS_VARIABLES}, args["cursor"]
+    )
+    reply, parsed = await request_page(
+        api, operation_id, variables, parse=importlib.import_module(f"{TWSCRAPE}.models").parse_users
+    )
+    result = community_result_of(reply)
+    members = result.get(COMMUNITY_MEMBERS_KEY) if result is not None else None
+    if not isinstance(members, dict):
+        return None
+    by_id = {user.id_str: user for user in parsed}
+    items = members.get("items_results")
+    listed = [item.get("result") for item in items if isinstance(item, dict)] if isinstance(items, list) else []
+    ids = dict.fromkeys(str(user["rest_id"]) for user in listed if isinstance(user, dict) and "rest_id" in user)
+    users = [by_id[user_id] for user_id in ids if user_id in by_id][: args["count"]]
+    slice_info = members.get("slice_info")
+    cursor = slice_info.get("next_cursor") if isinstance(slice_info, dict) else None
+    return {
+        "users": [user_of(user) for user in users],
+        "cursor": cursor if users and isinstance(cursor, str) else None,
+    }
 
 
 def failure_kind(exc: Exception, twscrape: Any) -> str:

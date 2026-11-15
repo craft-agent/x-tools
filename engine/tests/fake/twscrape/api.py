@@ -5,6 +5,8 @@ from .accounts_pool import AccountsPool
 from .models import Tweet, User
 from .utils import find_obj, get_by_path
 
+OP_CommunityQuery = "-ElI1vg3dYbttVMhBhGdLw/CommunityQuery"
+OP_CommunityTweetsTimeline = "bKYFeT4aNUQDMHx4gyXIoQ/CommunityTweetsTimeline"
 OP_Followers = "Xe3y9_ndZ9-RtWz8zd_wpg/Followers"
 OP_Following = "eDqlbOS46zda8jDT8dEQ_Q/Following"
 OP_ListLatestTweetsTimeline = "UMc_lPEeKz_WiKSY8ZT7yw/ListLatestTweetsTimeline"
@@ -15,6 +17,7 @@ OP_TweetDetail = "dQDdKtt882nl-Km98FJGSQ/TweetDetail"
 OP_UserMedia = "iTSlWbsmD00dAE7Sk9xvIw/UserMedia"
 OP_UserTweets = "D6z-FJI2pKuwEeYYxVIGbg/UserTweets"
 OP_UserTweetsAndReplies = "FmuxExUC21Xn_C2NwtX5sQ/UserTweetsAndReplies"
+OP_membersSliceTimeline_Query = "woAp_YdzAdqnWDrqLTNpAw/membersSliceTimeline_Query"
 ARTICLE_FIELD_TOGGLES = {
     "withArticleRichContentState": True,
     "withArticlePlainText": False,
