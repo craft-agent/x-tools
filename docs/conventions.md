@@ -813,13 +813,32 @@ and every entry point checks them the same way.
   of a handle in 7 days takes two reads and the next ones one. Who liked a post
   is not among them (see "What the tools never read").
 
+## Lists
+
+- **A list is named by its id or its URL** (`x.com/i/lists/<id>`, also on
+  twitter.com), and read as its posts or its members: a page of posts and a
+  page of users, in the shapes of any post and any user.
+- **A list reads only through the reading account.** FxTwitter has no list
+  route, so `source: fxtwitter` is refused before anything is read and
+  `auto` goes to the account; every page is one read of it.
+- **A list the reading account cannot see fails as `not_found`, saying
+  so.** X shows a private list only to its owner and members, and its reply
+  for a hidden list is not told apart from one for a missing list, so the
+  message says it may be either, rather than reading as a list with no
+  posts.
+- **A list's own details are not read**: its name, description, owner and
+  member count. The engine has no operation for them, and one kept here
+  would break without notice when X changes it.
+
 ## What the tools never read
 
 - **Spaces, and likes**: who liked a post and an account's likes, which X
   made private in 2024. Like counts stay in every post.
 - **The reading account's own data**: its home timeline, notifications,
-  bookmarks, lists, direct messages and scheduled posts. They are the reading
-  account's, not the user's, and nothing a caller asks for needs them.
+  bookmarks, the lists and communities it owns or joined, direct messages and
+  scheduled posts. They are the reading account's, not the user's, and nothing
+  a caller asks for needs them; a list or community named by id reads like
+  any other.
 
 ## Files
 
