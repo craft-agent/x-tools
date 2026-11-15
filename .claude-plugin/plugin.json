@@ -1,6 +1,6 @@
 {
   "name": "x-tools",
-  "version": "0.0.0",
+  "version": "0.1.0",
   "description": "Unofficial X tools for coding agents: read posts and profiles, save post media, never write to X.",
   "author": {
     "name": "craftsamo",
