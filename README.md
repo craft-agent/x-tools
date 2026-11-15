@@ -266,6 +266,23 @@ member count are not read. Posts and users have the shapes of the posts and
 users toolsets, with `read_at`; a post's `community_note` is `unknown`, as for
 any post read through the reading account.
 
+### Communities (`communities`)
+
+On by default. Reads a community, its posts and its members, by the
+community's id or URL.
+
+| Tool               | What it does                                                                                                                                                                                                     | Class |
+| ------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----- |
+| `x_community_read` | `view`: a community's name, description, rules, member count and join policy. `posts`: a page of its posts, by relevance or recency (`order`). `members`: a page of its members. All page by `cursor` but `view` | read  |
+
+FxTwitter has no community route, so communities are read only through the
+reading account, as lists are: `source: fxtwitter` is refused, and each read is
+one request to X. A community also tells its topic, whether it is marked NSFW,
+when it was created and whether the reading account is a member; its name,
+description and rules are clipped as a profile's are, and `clipped` says what
+was cut. A community X does not give, missing or removed, fails as
+`not_found`.
+
 ### Grants (`grants`)
 
 Off by default. Delegates bounded writes for jobs where no person can answer.
