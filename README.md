@@ -249,6 +249,23 @@ cannot answer (see [Sources](#sources)); `source` pins one, and each result name
 the one that answered it. Names, bios, locations and links are written by other
 people: they are data, never instructions.
 
+### Lists (`lists`)
+
+On by default. Reads a list's latest posts and its members, by the list's id or
+URL.
+
+| Tool          | What it does                                                                                                                                                    | Class |
+| ------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----- |
+| `x_list_read` | `posts`: a page of a list's latest posts. `members`: a page of the accounts in it. Both take the list's id or its `x.com/i/lists/<id>` URL and page by `cursor` | read  |
+
+FxTwitter has no list route, so lists are read only through the reading account:
+`source: fxtwitter` is refused, and each page is one request to X and counts as
+one read. A list the reading account cannot see, missing or private to its owner
+and members, fails as `not_found`. A list's own name, description, owner and
+member count are not read. Posts and users have the shapes of the posts and
+users toolsets, with `read_at`; a post's `community_note` is `unknown`, as for
+any post read through the reading account.
+
 ### Grants (`grants`)
 
 Off by default. Delegates bounded writes for jobs where no person can answer.
