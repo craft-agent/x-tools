@@ -147,6 +147,11 @@ TIMELINE_TOGGLES = {"media": {"withArticlePlainText": False}}
 # The arguments of `follows` and `reposters`.
 FOLLOWS_ARGS = frozenset({"user_id", "direction", "count", "cursor"})
 REPOSTERS_ARGS = frozenset({"id", "count", "cursor"})
+# The arguments of `list_posts` and `list_members`, and the toggles `list_timeline_raw` sends.
+LIST_ARGS = frozenset({"id", "count", "cursor"})
+LIST_POSTS_TOGGLES = {"withArticleRichContentState": False}
+LIST_POSTS_KEY = "tweets_timeline"
+LIST_MEMBERS_KEY = "members_timeline"
 # The twscrape operation each direction of `follows` reads (`followers_raw`, `following_raw`), the variables each
 # sends beside `userId` and `count` (twscrape keeps them inside the function), and the features of the one that sends any.
 FOLLOWS_OPERATIONS = {"followers": "OP_Followers", "following": "OP_Following"}
@@ -454,15 +459,34 @@ def check_search_args(args: dict) -> None:
     check_cursor_arg(cursor)
 
 
-def in_timeline_order(api: Any, timeline: dict, items: list[Any], entry_id: re.Pattern = ENTRY_POST_ID) -> list[Any]:
+def entry_ids_of(entry: Any, with_module_items: bool) -> list[str]:
+    """The entry ids that place items for `entry`: its own, or with `with_module_items` those of its module's items."""
+    if not isinstance(entry, dict):
+        return []
+    content = entry.get("content")
+    module_items = content.get("items") if with_module_items and isinstance(content, dict) else None
+    if isinstance(module_items, list):
+        return [str(item.get("entryId")) for item in module_items if isinstance(item, dict)]
+    return [str(entry.get("entryId"))]
+
+
+def in_timeline_order(
+    api: Any,
+    timeline: dict,
+    items: list[Any],
+    entry_id: re.Pattern = ENTRY_POST_ID,
+    with_module_items: bool = False,
+) -> list[Any]:
     """`items` (tweets or users) as the timeline lists them: by the id each entry's id holds (`entry_id`'s first
-    group), then the rest in their own order."""
+    group), then the rest in their own order. With `with_module_items` a module entry is placed by the ids of its
+    items' entry ids instead of its own."""
     by_id = {item.id_str: item for item in items}
     ordered = []
     for entry in api._gql_entries(timeline):
-        match = entry_id.search(str(entry.get("entryId"))) if isinstance(entry, dict) else None
-        if match and (item := by_id.pop(match.group(1), None)) is not None:
-            ordered.append(item)
+        for identifier in entry_ids_of(entry, with_module_items):
+            match = entry_id.search(identifier)
+            if match and (item := by_id.pop(match.group(1), None)) is not None:
+                ordered.append(item)
     return [*ordered, *by_id.values()]
 
 
@@ -474,6 +498,7 @@ async def request_page(
     toggles: dict | None = None,
     parse: Callable[[Any], Any] | None = None,
     entry_id: re.Pattern = ENTRY_POST_ID,
+    with_module_items: bool = False,
 ) -> tuple[dict, list[Any]]:
     """The timeline and parsed items (in timeline order) of one `_gql_item` request; raises `NoAccountError` when none."""
     rep = await api._gql_item(operation_id, variables, ft=ft, toggles=toggles)
@@ -483,7 +508,7 @@ async def request_page(
         )
     timeline = rep.json()
     parser = parse or importlib.import_module(f"{TWSCRAPE}.models").parse_tweets
-    return timeline, in_timeline_order(api, timeline, list(parser(rep)), entry_id)
+    return timeline, in_timeline_order(api, timeline, list(parser(rep)), entry_id, with_module_items)
 
 
 def paged_items(
@@ -500,17 +525,33 @@ def paged_posts(api: Any, timeline: dict, tweets: list[Any], count: int) -> dict
     return paged_items(api, timeline, tweets, count, "posts", post_of)
 
 
+def holds_list_timeline(reply: dict, key: str) -> bool:
+    """Whether X's `reply` holds a list's timeline under `data.list.<key>`."""
+    data = reply.get("data")
+    listing = data.get("list") if isinstance(data, dict) else None
+    return isinstance(listing, dict) and isinstance(listing.get(key), dict)
+
+
 async def read_users_page(
-    api: Any, operation_id: str, variables: dict, count: int, ft: dict | None = None, toggles: dict | None = None
-) -> dict:
+    api: Any,
+    operation_id: str,
+    variables: dict,
+    count: int,
+    ft: dict | None = None,
+    toggles: dict | None = None,
+    list_key: str | None = None,
+) -> dict | None:
     """One page of accounts from one `_gql_item` request: `{"users": [...], "cursor": str | None}`.
 
     The users are those X lists, in the order it lists them, as many as `count`; a page without users has no cursor.
+    With `list_key`, None when the reply holds no list timeline under that key.
     """
     parse_users = importlib.import_module(f"{TWSCRAPE}.models").parse_users
     timeline, users = await request_page(
         api, operation_id, variables, ft=ft, toggles=toggles, parse=parse_users, entry_id=ENTRY_USER_ID
     )
+    if list_key is not None and not holds_list_timeline(timeline, list_key):
+        return None
     return paged_items(api, timeline, users, count, "users", user_of)
 
 
@@ -856,6 +897,50 @@ async def read_reposters(api: Any, args: dict) -> dict:
     operation_id = importlib.import_module(f"{TWSCRAPE}.api").OP_Retweeters
     variables = {"tweetId": args["id"], "count": args["count"], **REPOSTERS_VARIABLES}
     return await read_users_page(api, operation_id, with_cursor(variables, args["cursor"]), args["count"])
+
+
+def check_list_args(args: dict) -> None:
+    """Raises `Failure("invalid_request")` unless `args` holds exactly a list id, a count and a cursor.
+
+    The messages name the argument and never repeat its value.
+    """
+    if set(args) != LIST_ARGS:
+        raise Failure("invalid_request", "args does not hold exactly id, count and cursor")
+    check_id_arg(args["id"], "id", "list id")
+    check_count_arg(args["count"])
+    check_cursor_arg(args["cursor"])
+
+
+@operation("list_posts", check_args=check_list_args)
+async def read_list_posts(api: Any, args: dict) -> dict | None:
+    """One page of a list's latest posts: `{"posts": [...], "cursor": str | None}`, or None when X gives no such list.
+
+    The one request is made here, with the variables and toggles twscrape's `list_timeline` sends (but for `count`):
+    twscrape pages inside a generator. The posts are those X lists, in the order it lists them (the posts of a
+    conversation module in place), as many as `count`; a page without posts has no cursor. None means X gave no such
+    list to this account.
+    """
+    operation_id = importlib.import_module(f"{TWSCRAPE}.api").OP_ListLatestTweetsTimeline
+    variables = with_cursor({"listId": args["id"], "count": args["count"]}, args["cursor"])
+    timeline, tweets = await request_page(
+        api, operation_id, variables, toggles=LIST_POSTS_TOGGLES, with_module_items=True
+    )
+    if not holds_list_timeline(timeline, LIST_POSTS_KEY):
+        return None
+    return paged_posts(api, timeline, tweets, args["count"])
+
+
+@operation("list_members", check_args=check_list_args)
+async def read_list_members(api: Any, args: dict) -> dict | None:
+    """One page of a list's members: `{"users": [...], "cursor": str | None}`, or None when X gives no such list.
+
+    The one request is made here, with the variables twscrape's `list_members` sends (but for `count`): twscrape pages
+    inside a generator. The users are those X lists, in the order it lists them, as many as `count`; a page without
+    users has no cursor. None means X gave no such list to this account.
+    """
+    operation_id = importlib.import_module(f"{TWSCRAPE}.api").OP_ListMembers
+    variables = with_cursor({"listId": args["id"], "count": args["count"]}, args["cursor"])
+    return await read_users_page(api, operation_id, variables, args["count"], list_key=LIST_MEMBERS_KEY)
 
 
 def failure_kind(exc: Exception, twscrape: Any) -> str:
