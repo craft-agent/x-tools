@@ -848,6 +848,30 @@ and every entry point checks them the same way.
   says it may be either; a community without its posts or members in the
   reply fails the same way, rather than reading as an empty one.
 
+## Trends
+
+- **Trends are what X's Explore lists, by `category`**: `trending` (the
+  default), `news`, `sports` or `entertainment`. Not the reading account's
+  personalised For You, and not by a location a caller picks: X lists them
+  for the place it places the reader in, FxTwitter's for FxTwitter and the
+  reading account's for its own settings, which the result's `source` tells
+  apart.
+- **`trending` reads FxTwitter first; the other categories only the reading
+  account.** FxTwitter's `/2/trends` lists only `trending`, one page of at
+  most 50 and no cursor; the reading account pages every category. A
+  FxTwitter answer with no trends, or its 404 for an Explore page it could
+  not load, falls to the reading account under `auto`, since an Explore with
+  nothing trending is FxTwitter failing, not X.
+- **A trend holds its name, rank, context and grouped topics, and the words
+  to search it with.** `query` is what to pass to a post search: X's own
+  search query when it gives one, else the name. A story, X's written
+  summary of a topic, has a headline for a name and no search query; its
+  `query` is null and its `url` is the story's page. Names are clipped at
+  280 characters.
+- **No post count.** Neither source reports one as a value, only inside
+  display text, and a count read from display text breaks without notice
+  when X rewords it.
+
 ## What the tools never read
 
 - **Spaces, and likes**: who liked a post and an account's likes, which X
