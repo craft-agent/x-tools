@@ -1,7 +1,7 @@
 {
   "name": "@craftsamo/x-tools",
   "version": "0.0.0",
-  "description": "Unofficial, read-only X tools for coding agents: search, threads, profiles, media and post checks.",
+  "description": "Unofficial X tools for coding agents: read posts and profiles, save post media, never write to X.",
   "author": "craftsamo",
   "license": "LicenseRef-AGPL-3.0-Commons-Clause",
   "repository": {
