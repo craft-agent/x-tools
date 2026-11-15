@@ -9,6 +9,7 @@ export const ACCOUNT_READ = "x_account_read"
 export const POST_READ = "x_post_read"
 export const USER_READ = "x_user_read"
 export const LIST_READ = "x_list_read"
+export const COMMUNITY_READ = "x_community_read"
 
 /** The reads of each tool that only the reading account may answer, so they never reach FxTwitter or X: none is set up in the empty state directory. */
 export const ACCOUNT_ONLY_READS = [
@@ -35,6 +36,14 @@ export const ACCOUNT_ONLY_READS = [
     [
       { method: "posts", list: "20", source: "account" },
       { method: "members", list: "20", source: "account" },
+    ],
+  ],
+  [
+    COMMUNITY_READ,
+    [
+      { method: "view", community: "20", source: "account" },
+      { method: "posts", community: "20", source: "account" },
+      { method: "members", community: "20", source: "account" },
     ],
   ],
 ]

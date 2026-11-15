@@ -6,6 +6,7 @@ import { fileURLToPath } from "node:url"
 import {
   ACCOUNT_ONLY_READS,
   ACCOUNT_READ,
+  COMMUNITY_READ,
   EXIT_USAGE,
   LIST_READ,
   POST_READ,
@@ -33,7 +34,7 @@ async function listsTheServersTools() {
     const run = cli(["list", ...settings])
     expect(run.status === 0, `Expected exit 0 for ${label}, got ${run.status}: ${run.stderr}`)
     const listed = JSON.parse(run.stdout)
-    for (const id of [ACCOUNT_READ, POST_READ, USER_READ, LIST_READ]) {
+    for (const id of [ACCOUNT_READ, POST_READ, USER_READ, LIST_READ, COMMUNITY_READ]) {
       expect(
         listed.some((tool) => tool.id === id && tool.class === "read"),
         `Expected ${label} to include ${id} as a read tool, got ${run.stdout}`,

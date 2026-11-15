@@ -6,6 +6,7 @@ import { PLUGIN_NAME } from "./package-name.mjs"
 import {
   ACCOUNT_ONLY_READS,
   ACCOUNT_READ,
+  COMMUNITY_READ,
   LIST_READ,
   POST_READ,
   USER_READ,
@@ -57,7 +58,7 @@ try {
   console.log(`The OpenCode plugin ${plugin.id} exports setup and server.`)
 
   const expected = (await mcpToolNames(stateDir)).sort()
-  for (const name of [ACCOUNT_READ, POST_READ, USER_READ, LIST_READ]) {
+  for (const name of [ACCOUNT_READ, POST_READ, USER_READ, LIST_READ, COMMUNITY_READ]) {
     expect(expected.includes(name), `Expected the MCP registry to include ${name}.`)
   }
 
