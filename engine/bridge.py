@@ -25,6 +25,7 @@ import math
 import re
 import sqlite3
 import sys
+import urllib.parse
 import uuid
 from collections.abc import Awaitable, Callable
 from datetime import datetime, timezone
@@ -176,6 +177,22 @@ COMMUNITY_UNAVAILABLE = "CommunityUnavailable"
 COMMUNITY_TIMELINE_KEYS = ("ranked_community_timeline", "community_timeline")
 COMMUNITY_MEMBERS_KEY = "members_slice"
 COMMUNITY_PARSE_MESSAGE = "X's reply holds a community the bridge cannot read"
+# The arguments of `trends`, the Explore timeline of each category (the ids twscrape's `trends_raw` sends, padded as X
+# needs them) and what the request sends beside the timeline id.
+TRENDS_ARGS = frozenset({"category", "count", "cursor"})
+TREND_TIMELINES = {
+    "trending": "VGltZWxpbmU6DAC2CwABAAAACHRyZW5kaW5nAAA=",
+    "news": "VGltZWxpbmU6DAC2CwABAAAABG5ld3MAAA==",
+    "sports": "VGltZWxpbmU6DAC2CwABAAAABnNwb3J0cwAA",
+    "entertainment": "VGltZWxpbmU6DAC2CwABAAAADWVudGVydGFpbm1lbnQAAA==",
+}
+TREND_CATEGORIES = tuple(TREND_TIMELINES)
+TREND_VARIABLES = {"withQuickPromoteEligibilityTweetFields": True}
+TREND_TYPENAME = "TimelineTrend"
+TREND_QUERY_KEYS = ("query", "rawQuery")
+TREND_SEARCH_URL = "twitter://search/"
+TREND_STORY_URL = re.compile(r"twitter://trending/([0-9]+)")
+TREND_PARSE_MESSAGE = "X's reply holds trends the bridge cannot read"
 # The twscrape operation each direction of `follows` reads (`followers_raw`, `following_raw`), the variables each
 # sends beside `userId` and `count` (twscrape keeps them inside the function), and the features of the one that sends any.
 FOLLOWS_OPERATIONS = {"followers": "OP_Followers", "following": "OP_Following"}
@@ -1150,6 +1167,116 @@ async def read_community_members(api: Any, args: dict) -> dict | None:
         "users": [user_of(user) for user in users],
         "cursor": cursor if users and isinstance(cursor, str) else None,
     }
+
+
+def check_trends_args(args: dict) -> None:
+    """Raises `Failure("invalid_request")` unless `args` holds exactly a trend category, a count and a cursor.
+
+    The messages name the argument and never repeat its value.
+    """
+    if set(args) != TRENDS_ARGS:
+        raise Failure("invalid_request", "args does not hold exactly category, count and cursor")
+    category = args["category"]
+    if not isinstance(category, str) or category not in TREND_CATEGORIES:
+        raise Failure("invalid_request", f"args.category is not one of {', '.join(TREND_CATEGORIES)}")
+    check_count_arg(args["count"])
+    check_cursor_arg(args["cursor"])
+
+
+def dicts_of(value: Any) -> list[dict]:
+    """The objects of `value` when it is a list; none otherwise."""
+    return [element for element in value if isinstance(element, dict)] if isinstance(value, list) else []
+
+
+def trend_query(trend_url: Any) -> str | None:
+    """The search query of a trend's `trend_url`: its `query` or `rawQuery` request parameter, else the `query`
+    parameter of a `twitter://search/` URL; None when it holds neither."""
+    if not isinstance(trend_url, dict):
+        return None
+    options = trend_url.get("urtEndpointOptions")
+    for param in dicts_of(options.get("requestParams") if isinstance(options, dict) else None):
+        value = param.get("value")
+        if param.get("key") in TREND_QUERY_KEYS and isinstance(value, str) and value:
+            return value
+    url = trend_url.get("url")
+    if isinstance(url, str) and url.startswith(TREND_SEARCH_URL):
+        values = urllib.parse.parse_qs(urllib.parse.urlsplit(url).query).get("query")
+        return values[0] if values and values[0] else None
+    return None
+
+
+def trend_of(item: dict) -> dict | None:
+    """The compact dict of a `TimelineTrend`'s `itemContent`; None when it has no text `name`."""
+    name = item.get("name")
+    if not isinstance(name, str):
+        return None
+    metadata = item.get("trend_metadata")
+    metadata = metadata if isinstance(metadata, dict) else {}
+    trend_url = item.get("trend_url")
+    url = trend_url.get("url") if isinstance(trend_url, dict) else None
+    story = TREND_STORY_URL.fullmatch(url) if isinstance(url, str) else None
+    rank = item.get("rank")
+    context = metadata.get("domain_context")
+    return {
+        "name": name,
+        "rank": int(rank) if isinstance(rank, str) and DECIMAL_ID.fullmatch(rank) else None,
+        "context": context if isinstance(context, str) else None,
+        "grouped": [
+            group["name"]
+            for group in dicts_of(item.get("grouped_trends"))
+            if isinstance(group.get("name"), str)
+        ],
+        "query": trend_query(trend_url),
+        "story_id": story.group(1) if story else None,
+    }
+
+
+def trend_items_of(entry: Any) -> list[dict]:
+    """The `TimelineTrend` objects an entry holds: its own `itemContent`, or those of its module's items, in order."""
+    content = entry.get("content") if isinstance(entry, dict) else None
+    if not isinstance(content, dict):
+        return []
+    if isinstance(content.get("items"), list):
+        wrappers = [item.get("item") for item in dicts_of(content["items"])]
+        contents = [wrapper.get("itemContent") for wrapper in wrappers if isinstance(wrapper, dict)]
+    else:
+        contents = [content.get("itemContent")]
+    return [
+        found
+        for found in contents
+        if isinstance(found, dict) and TREND_TYPENAME in (found.get("__typename"), found.get("itemType"))
+    ]
+
+
+@operation("trends", check_args=check_trends_args)
+async def read_trends(api: Any, args: dict) -> dict:
+    """One page of X's Explore trends for a category: `{"trends": [...], "cursor": str | None}`.
+
+    The one request is made here, with the variables twscrape's `trends` sends (but for `count`): twscrape pages
+    inside a generator. The trends are those X lists, in the order it lists them (the stories of a module among
+    them, each with its `story_id`), once by name, as many as `count`; a page without trends has no cursor. A trend's
+    `query` is the search it opens, when its link holds one. Reads the reply itself, as twscrape's parser drops the
+    trends without a link and keeps nothing of the stories.
+    """
+    operation_id = importlib.import_module(f"{TWSCRAPE}.api").OP_GenericTimelineById
+    variables = with_cursor(
+        {"timelineId": TREND_TIMELINES[args["category"]], "count": args["count"], **TREND_VARIABLES}, args["cursor"]
+    )
+    reply = (await request_reply(api, operation_id, variables)).json()
+    data = reply.get("data") if isinstance(reply, dict) else None
+    holder = data.get("timeline") if isinstance(data, dict) else None
+    timeline = holder.get("timeline") if isinstance(holder, dict) else None
+    if not isinstance(timeline, dict):
+        raise getattr(importlib.import_module(TWSCRAPE), PARSE_ERRORS[0])(TREND_PARSE_MESSAGE)
+    trends = {}
+    for instruction in dicts_of(timeline.get("instructions")):
+        if instruction.get("type") != "TimelineAddEntries":
+            continue
+        for entry in dicts_of(instruction.get("entries")):
+            for item in trend_items_of(entry):
+                if (trend := trend_of(item)) is not None:
+                    trends.setdefault(trend["name"], trend)
+    return paged_items(api, timeline, list(trends.values()), args["count"], "trends", dict)
 
 
 def failure_kind(exc: Exception, twscrape: Any) -> str:
