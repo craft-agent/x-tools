@@ -21,6 +21,7 @@ import {
   type ToolSpec,
   type Toolsets,
 } from "../core"
+import { downloadDirContext } from "../entry/download-dir"
 import { errorBody } from "../entry/errors"
 import { PROJECT_PROFILE } from "../entry/profile"
 import { createToolRuntime, type RuntimeOptions } from "../entry/runtime"
@@ -100,6 +101,7 @@ export function createServer(specs: ToolSpec[], settings: EntrySettings, options
         options: settings.options,
         grants: settings.grants,
         ...stateDirContext(settings),
+        ...downloadDirContext(settings),
         runtime,
         signal: extra.signal,
         ...(confirm && { confirm }),

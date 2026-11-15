@@ -20,6 +20,7 @@ export const PROJECT = {
   /** The package's own settings, which the tools themselves read: each snake_case name and its type, with bounds when it needs them. */
   options: {
     state_dir: "path",
+    download_dir: "path",
     read_gap_seconds: { type: "number", integer: true, min: 1, max: 3600 },
     reads_per_hour: { type: "number", integer: true, min: 1, max: 60 },
     reads_per_day: { type: "number", integer: true, min: 1, max: 500 },

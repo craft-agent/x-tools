@@ -75,6 +75,8 @@ export type ToolContext = {
   grants?: GrantContext
   /** Where every reading account's state and the engine live: an absolute path the entry point resolved. */
   stateDir?: string
+  /** Where downloaded media go: an absolute path the entry point resolved. */
+  downloadDir?: string
   /** The package's identity and environment, which the entry point supplied. */
   runtime?: ToolRuntime
 }

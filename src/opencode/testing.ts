@@ -21,7 +21,7 @@ import { NOTE_OPTION } from "../entry/options.testing"
 export const PROFILE: EntryProfile = {
   name: "demo-tools",
   envPrefix: "DEMO",
-  options: { [NOTE_OPTION]: "text", state_dir: "path" },
+  options: { [NOTE_OPTION]: "text", state_dir: "path", download_dir: "path" },
   toolsets: { names: ["alpha", "beta"], defaults: ["alpha"] },
 }
 

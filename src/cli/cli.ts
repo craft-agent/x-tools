@@ -14,6 +14,7 @@ import {
   type ToolSpec,
   type Translations,
 } from "../core"
+import { downloadDirContext } from "../entry/download-dir"
 import { errorBody } from "../entry/errors"
 import { approvalOf, checkPin } from "../entry/pin"
 import { PROJECT_PROFILE, type EntryProfile } from "../entry/profile"
@@ -49,8 +50,8 @@ export type CliIo = CommandIo & {
   translations?: Translations
 }
 
-/** What a call's context takes from the command line: the package's own settings and the grants' context. */
-type CallSettings = Pick<ToolEntrySettings, "options" | "grants" | "state_dir">
+/** What a call's context takes from the command line: the package's own settings, the grants' context and the resolved directories. */
+type CallSettings = Pick<ToolEntrySettings, "options" | "grants" | "state_dir" | "download_dir">
 
 type Command =
   | { name: "list"; selected: ToolSpec[] }
@@ -86,6 +87,7 @@ function parseCommand(argv: string[], io: Pick<CliIo, "specs" | "env" | "profile
       options: settings.options,
       grants: settings.grants,
       state_dir: settings.state_dir,
+      download_dir: settings.download_dir,
     }
   }
   const [name, ...args] = argv
@@ -163,6 +165,7 @@ function callContext(command: Extract<Command, { name: "run" | "target" }>, io: 
     options: command.options,
     grants: command.grants,
     ...stateDirContext(command),
+    ...downloadDirContext(command),
     runtime: createToolRuntime(io),
     signal: io.signal,
   }

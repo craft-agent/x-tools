@@ -55,11 +55,12 @@ class SettingsFlagsTest(unittest.TestCase):
 
 
 class OptionFlagsTest(unittest.TestCase):
-    def test_the_package_has_the_state_dir_and_pacing_options(self) -> None:
+    def test_the_package_has_the_state_dir_download_dir_and_pacing_options(self) -> None:
         self.assertEqual(
             list(project.OPTIONS),
             [
                 "state_dir",
+                "download_dir",
                 "read_gap_seconds",
                 "reads_per_hour",
                 "reads_per_day",

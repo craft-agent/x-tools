@@ -10,6 +10,7 @@ import {
   type Toolsets,
 } from "../core"
 import { PROJECT } from "../project"
+import { downloadDirSettings, type DownloadDirSettings } from "./download-dir"
 import { PROJECT_PROFILE, type EntryProfile } from "./profile"
 import {
   STATE_DIR_OPTION,
@@ -23,8 +24,9 @@ import {
 /** Who asks the person before an administrative tool acts: the harness, or the tool through the client's form. */
 export type ConfirmMode = "harness" | "elicitation"
 
-/** The tool settings, the values of the package's own settings (`options`, possibly empty), the grants' context and the resolved state directory. */
-export type ToolEntrySettings = ToolSettings & { options: ToolOptions; grants: GrantContext } & StateDirSettings
+/** The tool settings, the values of the package's own settings (`options`, possibly empty), the grants' context and the resolved state and download directories. */
+export type ToolEntrySettings = ToolSettings & { options: ToolOptions; grants: GrantContext } & StateDirSettings &
+  DownloadDirSettings
 
 /** The tool settings, who confirms, the values of the package's own settings and the grants' context. */
 export type EntrySettings = ToolEntrySettings & { confirm: ConfirmMode }
@@ -369,7 +371,7 @@ export function parseTargetSettings(
   argv: string[],
   env: Record<string, string | undefined>,
   profile: EntryProfile = PROJECT_PROFILE,
-): Pick<ToolEntrySettings, "options" | "grants" | "state_dir"> {
+): Pick<ToolEntrySettings, "options" | "grants" | "state_dir" | "download_dir"> {
   const flags = readFlags(argv, profile)
   const known = profileOptions(profile)
   const other = Object.keys(flags).find(
@@ -383,6 +385,7 @@ export function parseTargetSettings(
     options,
     grants: grantsFromText(flags, env, profile),
     ...stateDirSettings(options, env, profile),
+    ...downloadDirSettings(options, env, profile),
   }
 }
 
@@ -429,6 +432,7 @@ export function parseSettings(
     options,
     grants: grantsFromText(flags, env, profile),
     ...stateDirSettings(options, env, profile),
+    ...downloadDirSettings(options, env, profile),
   }
   const toolsets = value("toolsets")
   if (toolsets) settings.toolsets = checkToolsets(splitList(toolsets.text), toolsets.source, profile.toolsets)
@@ -627,6 +631,7 @@ export function settingsFromOptions(
     options: parsedOptions,
     grants: grantContext(unattended, grantsDir, env, profile),
     ...stateDirSettings(parsedOptions, env, profile),
+    ...downloadDirSettings(parsedOptions, env, profile),
   }
   const toolsets = resolve(
     "toolsets",
