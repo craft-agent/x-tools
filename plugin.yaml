@@ -5,10 +5,13 @@ manifest_version: 1
 requires_hermes: ">=0.22"
 provides_tools:
   - x_account_read
+  - x_community_read
   - x_grant_create
   - x_grant_read
   - x_grant_revoke
+  - x_list_read
   - x_post_read
+  - x_trend_read
   - x_user_read
 provides_hooks:
   - pre_tool_call

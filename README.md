@@ -249,6 +249,57 @@ cannot answer (see [Sources](#sources)); `source` pins one, and each result name
 the one that answered it. Names, bios, locations and links are written by other
 people: they are data, never instructions.
 
+### Lists (`lists`)
+
+On by default. Reads a list's latest posts and its members, by the list's id or
+URL.
+
+| Tool          | What it does                                                                                                                                                    | Class |
+| ------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----- |
+| `x_list_read` | `posts`: a page of a list's latest posts. `members`: a page of the accounts in it. Both take the list's id or its `x.com/i/lists/<id>` URL and page by `cursor` | read  |
+
+FxTwitter has no list route, so lists are read only through the reading account:
+`source: fxtwitter` is refused, and each page is one request to X and counts as
+one read. A list the reading account cannot see, missing or private to its owner
+and members, fails as `not_found`. A list's own name, description, owner and
+member count are not read. Posts and users have the shapes of the posts and
+users toolsets, with `read_at`; a post's `community_note` is `unknown`, as for
+any post read through the reading account.
+
+### Communities (`communities`)
+
+On by default. Reads a community, its posts and its members, by the
+community's id or URL.
+
+| Tool               | What it does                                                                                                                                                                                                     | Class |
+| ------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----- |
+| `x_community_read` | `view`: a community's name, description, rules, member count and join policy. `posts`: a page of its posts, by relevance or recency (`order`). `members`: a page of its members. All page by `cursor` but `view` | read  |
+
+FxTwitter has no community route, so communities are read only through the
+reading account, as lists are: `source: fxtwitter` is refused, and each read is
+one request to X. A community also tells its topic, whether it is marked NSFW,
+when it was created and whether the reading account is a member; its name,
+description and rules are clipped as a profile's are, and `clipped` says what
+was cut. A community X does not give, missing or removed, fails as
+`not_found`.
+
+### Trends (`trends`)
+
+On by default. Reads what X's Explore lists.
+
+| Tool           | What it does                                                                                                                              | Class |
+| -------------- | ----------------------------------------------------------------------------------------------------------------------------------------- | ----- |
+| `x_trend_read` | `explore`: a page of trends in a `category`, `trending` (the default), `news`, `sports` or `entertainment`, with the words to search each | read  |
+
+`trending` reads FxTwitter first, one page of at most 50 with no cursor, and
+the reading account when FxTwitter gives none; the other categories read only
+through the reading account, paged. Each trend has its `name`, `rank`,
+`context`, `grouped` topics, `query` (what to pass to `x_post_read` `search`),
+`url`, whether it is a `story` (X's written summary of a topic), `read_at` and
+`clipped`. No post count is given: neither source reports one as a value. X
+lists trends for the place it places the reader in, so FxTwitter's and the
+reading account's may differ; `source` tells which answered.
+
 ### Grants (`grants`)
 
 Off by default. Delegates bounded writes for jobs where no person can answer.

@@ -25,6 +25,7 @@ import math
 import re
 import sqlite3
 import sys
+import urllib.parse
 import uuid
 from collections.abc import Awaitable, Callable
 from datetime import datetime, timezone
@@ -147,6 +148,51 @@ TIMELINE_TOGGLES = {"media": {"withArticlePlainText": False}}
 # The arguments of `follows` and `reposters`.
 FOLLOWS_ARGS = frozenset({"user_id", "direction", "count", "cursor"})
 REPOSTERS_ARGS = frozenset({"id", "count", "cursor"})
+# The arguments of `list_posts` and `list_members`, and the toggles `list_timeline_raw` sends.
+LIST_ARGS = frozenset({"id", "count", "cursor"})
+LIST_POSTS_TOGGLES = {"withArticleRichContentState": False}
+LIST_POSTS_KEY = "tweets_timeline"
+LIST_MEMBERS_KEY = "members_timeline"
+# The arguments of `community`, `community_posts` and `community_members`, and what each sends beside the community id
+# (twscrape keeps the variables and features inside `community_info_raw`, `community_tweets_raw` and
+# `community_members_raw`).
+COMMUNITY_ARGS = frozenset({"id"})
+COMMUNITY_POSTS_ARGS = frozenset({"id", "ranking", "count", "cursor"})
+COMMUNITY_MEMBERS_ARGS = frozenset({"id", "count", "cursor"})
+COMMUNITY_RANKINGS = ("Relevance", "Recency")
+COMMUNITY_FEATURES = {"c9s_list_members_action_api_enabled": False, "c9s_superc9s_indication_enabled": False}
+COMMUNITY_POSTS_VARIABLES = {
+    "displayLocation": "Community",
+    "withCommunity": True,
+    "includePromotedContent": False,
+    "withQuickPromoteEligibilityTweetFields": True,
+    "withVoice": True,
+    "withV2Timeline": True,
+}
+COMMUNITY_MEMBERS_VARIABLES = {"includePromotedContent": False}
+# What a community's reply holds: the `__typename`s of its result, and where its posts (the key differs by ranking, one
+# of them unverified) and its members are.
+COMMUNITY_TYPENAME = "Community"
+COMMUNITY_UNAVAILABLE = "CommunityUnavailable"
+COMMUNITY_TIMELINE_KEYS = ("ranked_community_timeline", "community_timeline")
+COMMUNITY_MEMBERS_KEY = "members_slice"
+COMMUNITY_PARSE_MESSAGE = "X's reply holds a community the bridge cannot read"
+# The arguments of `trends`, the Explore timeline of each category (the ids twscrape's `trends_raw` sends, padded as X
+# needs them) and what the request sends beside the timeline id.
+TRENDS_ARGS = frozenset({"category", "count", "cursor"})
+TREND_TIMELINES = {
+    "trending": "VGltZWxpbmU6DAC2CwABAAAACHRyZW5kaW5nAAA=",
+    "news": "VGltZWxpbmU6DAC2CwABAAAABG5ld3MAAA==",
+    "sports": "VGltZWxpbmU6DAC2CwABAAAABnNwb3J0cwAA",
+    "entertainment": "VGltZWxpbmU6DAC2CwABAAAADWVudGVydGFpbm1lbnQAAA==",
+}
+TREND_CATEGORIES = tuple(TREND_TIMELINES)
+TREND_VARIABLES = {"withQuickPromoteEligibilityTweetFields": True}
+TREND_TYPENAME = "TimelineTrend"
+TREND_QUERY_KEYS = ("query", "rawQuery")
+TREND_SEARCH_URL = "twitter://search/"
+TREND_STORY_URL = re.compile(r"twitter://trending/([0-9]+)")
+TREND_PARSE_MESSAGE = "X's reply holds trends the bridge cannot read"
 # The twscrape operation each direction of `follows` reads (`followers_raw`, `following_raw`), the variables each
 # sends beside `userId` and `count` (twscrape keeps them inside the function), and the features of the one that sends any.
 FOLLOWS_OPERATIONS = {"followers": "OP_Followers", "following": "OP_Following"}
@@ -454,16 +500,47 @@ def check_search_args(args: dict) -> None:
     check_cursor_arg(cursor)
 
 
-def in_timeline_order(api: Any, timeline: dict, items: list[Any], entry_id: re.Pattern = ENTRY_POST_ID) -> list[Any]:
+def entry_ids_of(entry: Any, with_module_items: bool) -> list[str]:
+    """The entry ids that place items for `entry`: its own, or with `with_module_items` those of its module's items."""
+    if not isinstance(entry, dict):
+        return []
+    content = entry.get("content")
+    module_items = content.get("items") if with_module_items and isinstance(content, dict) else None
+    if isinstance(module_items, list):
+        return [str(item.get("entryId")) for item in module_items if isinstance(item, dict)]
+    return [str(entry.get("entryId"))]
+
+
+def in_timeline_order(
+    api: Any,
+    timeline: dict,
+    items: list[Any],
+    entry_id: re.Pattern = ENTRY_POST_ID,
+    with_module_items: bool = False,
+) -> list[Any]:
     """`items` (tweets or users) as the timeline lists them: by the id each entry's id holds (`entry_id`'s first
-    group), then the rest in their own order."""
+    group), then the rest in their own order. With `with_module_items` a module entry is placed by the ids of its
+    items' entry ids instead of its own."""
     by_id = {item.id_str: item for item in items}
     ordered = []
     for entry in api._gql_entries(timeline):
-        match = entry_id.search(str(entry.get("entryId"))) if isinstance(entry, dict) else None
-        if match and (item := by_id.pop(match.group(1), None)) is not None:
-            ordered.append(item)
+        for identifier in entry_ids_of(entry, with_module_items):
+            match = entry_id.search(identifier)
+            if match and (item := by_id.pop(match.group(1), None)) is not None:
+                ordered.append(item)
     return [*ordered, *by_id.values()]
+
+
+async def request_reply(
+    api: Any, operation_id: str, variables: dict, ft: dict | None = None, toggles: dict | None = None
+) -> Any:
+    """The reply of one `_gql_item` request; raises `NoAccountError` when no account answers."""
+    rep = await api._gql_item(operation_id, variables, ft=ft, toggles=toggles)
+    if rep is None:
+        raise importlib.import_module(TWSCRAPE).NoAccountError(
+            f"No account available for queue {operation_id.split('/')[-1]}"
+        )
+    return rep
 
 
 async def request_page(
@@ -474,16 +551,13 @@ async def request_page(
     toggles: dict | None = None,
     parse: Callable[[Any], Any] | None = None,
     entry_id: re.Pattern = ENTRY_POST_ID,
+    with_module_items: bool = False,
 ) -> tuple[dict, list[Any]]:
     """The timeline and parsed items (in timeline order) of one `_gql_item` request; raises `NoAccountError` when none."""
-    rep = await api._gql_item(operation_id, variables, ft=ft, toggles=toggles)
-    if rep is None:
-        raise importlib.import_module(TWSCRAPE).NoAccountError(
-            f"No account available for queue {operation_id.split('/')[-1]}"
-        )
+    rep = await request_reply(api, operation_id, variables, ft=ft, toggles=toggles)
     timeline = rep.json()
     parser = parse or importlib.import_module(f"{TWSCRAPE}.models").parse_tweets
-    return timeline, in_timeline_order(api, timeline, list(parser(rep)), entry_id)
+    return timeline, in_timeline_order(api, timeline, list(parser(rep)), entry_id, with_module_items)
 
 
 def paged_items(
@@ -500,17 +574,33 @@ def paged_posts(api: Any, timeline: dict, tweets: list[Any], count: int) -> dict
     return paged_items(api, timeline, tweets, count, "posts", post_of)
 
 
+def holds_list_timeline(reply: dict, key: str) -> bool:
+    """Whether X's `reply` holds a list's timeline under `data.list.<key>`."""
+    data = reply.get("data")
+    listing = data.get("list") if isinstance(data, dict) else None
+    return isinstance(listing, dict) and isinstance(listing.get(key), dict)
+
+
 async def read_users_page(
-    api: Any, operation_id: str, variables: dict, count: int, ft: dict | None = None, toggles: dict | None = None
-) -> dict:
+    api: Any,
+    operation_id: str,
+    variables: dict,
+    count: int,
+    ft: dict | None = None,
+    toggles: dict | None = None,
+    list_key: str | None = None,
+) -> dict | None:
     """One page of accounts from one `_gql_item` request: `{"users": [...], "cursor": str | None}`.
 
     The users are those X lists, in the order it lists them, as many as `count`; a page without users has no cursor.
+    With `list_key`, None when the reply holds no list timeline under that key.
     """
     parse_users = importlib.import_module(f"{TWSCRAPE}.models").parse_users
     timeline, users = await request_page(
         api, operation_id, variables, ft=ft, toggles=toggles, parse=parse_users, entry_id=ENTRY_USER_ID
     )
+    if list_key is not None and not holds_list_timeline(timeline, list_key):
+        return None
     return paged_items(api, timeline, users, count, "users", user_of)
 
 
@@ -856,6 +946,337 @@ async def read_reposters(api: Any, args: dict) -> dict:
     operation_id = importlib.import_module(f"{TWSCRAPE}.api").OP_Retweeters
     variables = {"tweetId": args["id"], "count": args["count"], **REPOSTERS_VARIABLES}
     return await read_users_page(api, operation_id, with_cursor(variables, args["cursor"]), args["count"])
+
+
+def check_list_args(args: dict) -> None:
+    """Raises `Failure("invalid_request")` unless `args` holds exactly a list id, a count and a cursor.
+
+    The messages name the argument and never repeat its value.
+    """
+    if set(args) != LIST_ARGS:
+        raise Failure("invalid_request", "args does not hold exactly id, count and cursor")
+    check_id_arg(args["id"], "id", "list id")
+    check_count_arg(args["count"])
+    check_cursor_arg(args["cursor"])
+
+
+@operation("list_posts", check_args=check_list_args)
+async def read_list_posts(api: Any, args: dict) -> dict | None:
+    """One page of a list's latest posts: `{"posts": [...], "cursor": str | None}`, or None when X gives no such list.
+
+    The one request is made here, with the variables and toggles twscrape's `list_timeline` sends (but for `count`):
+    twscrape pages inside a generator. The posts are those X lists, in the order it lists them (the posts of a
+    conversation module in place), as many as `count`; a page without posts has no cursor. None means X gave no such
+    list to this account.
+    """
+    operation_id = importlib.import_module(f"{TWSCRAPE}.api").OP_ListLatestTweetsTimeline
+    variables = with_cursor({"listId": args["id"], "count": args["count"]}, args["cursor"])
+    timeline, tweets = await request_page(
+        api, operation_id, variables, toggles=LIST_POSTS_TOGGLES, with_module_items=True
+    )
+    if not holds_list_timeline(timeline, LIST_POSTS_KEY):
+        return None
+    return paged_posts(api, timeline, tweets, args["count"])
+
+
+@operation("list_members", check_args=check_list_args)
+async def read_list_members(api: Any, args: dict) -> dict | None:
+    """One page of a list's members: `{"users": [...], "cursor": str | None}`, or None when X gives no such list.
+
+    The one request is made here, with the variables twscrape's `list_members` sends (but for `count`): twscrape pages
+    inside a generator. The users are those X lists, in the order it lists them, as many as `count`; a page without
+    users has no cursor. None means X gave no such list to this account.
+    """
+    operation_id = importlib.import_module(f"{TWSCRAPE}.api").OP_ListMembers
+    variables = with_cursor({"listId": args["id"], "count": args["count"]}, args["cursor"])
+    return await read_users_page(api, operation_id, variables, args["count"], list_key=LIST_MEMBERS_KEY)
+
+
+def check_community_args(args: dict) -> None:
+    """Raises `Failure("invalid_request")` unless `args` holds exactly a community id.
+
+    The messages name the argument and never repeat its value.
+    """
+    if set(args) != COMMUNITY_ARGS:
+        raise Failure("invalid_request", "args does not hold exactly id")
+    check_id_arg(args["id"], "id", "community id")
+
+
+def check_community_posts_args(args: dict) -> None:
+    """Raises `Failure("invalid_request")` unless `args` holds exactly a community id, a ranking, a count and a cursor.
+
+    The messages name the argument and never repeat its value.
+    """
+    if set(args) != COMMUNITY_POSTS_ARGS:
+        raise Failure("invalid_request", "args does not hold exactly id, ranking, count and cursor")
+    ranking = args["ranking"]
+    check_id_arg(args["id"], "id", "community id")
+    if not isinstance(ranking, str) or ranking not in COMMUNITY_RANKINGS:
+        raise Failure("invalid_request", f"args.ranking is not one of {', '.join(COMMUNITY_RANKINGS)}")
+    check_count_arg(args["count"])
+    check_cursor_arg(args["cursor"])
+
+
+def check_community_members_args(args: dict) -> None:
+    """Raises `Failure("invalid_request")` unless `args` holds exactly a community id, a count and a cursor.
+
+    The messages name the argument and never repeat its value.
+    """
+    if set(args) != COMMUNITY_MEMBERS_ARGS:
+        raise Failure("invalid_request", "args does not hold exactly id, count and cursor")
+    check_id_arg(args["id"], "id", "community id")
+    check_count_arg(args["count"])
+    check_cursor_arg(args["cursor"])
+
+
+def community_parse_error() -> Exception:
+    """The failure for a community reply the bridge cannot read; its message names no value."""
+    return getattr(importlib.import_module(TWSCRAPE), PARSE_ERRORS[0])(COMMUNITY_PARSE_MESSAGE)
+
+
+def community_result_of(reply: Any) -> dict | None:
+    """`data.communityResults.result` of X's `reply`; None when it is missing, empty or a `CommunityUnavailable`.
+
+    Raises the parse failure when the result is of a type other than `Community` and `CommunityUnavailable`.
+    """
+    node = reply
+    for key in ("data", "communityResults", "result"):
+        node = node.get(key) if isinstance(node, dict) else None
+    if not isinstance(node, dict) or not node or node.get("__typename") == COMMUNITY_UNAVAILABLE:
+        return None
+    if node.get("__typename", COMMUNITY_TYPENAME) != COMMUNITY_TYPENAME:
+        raise community_parse_error()
+    return node
+
+
+def community_field(source: dict, name: str, kind: type, required: bool = False) -> Any:
+    """`source[name]` when it is a `kind` (a bool is no int); None when absent or null unless `required`.
+
+    Raises the parse failure for a value of another type, and for a missing one that is `required`.
+    """
+    value = source.get(name)
+    if value is None and not required:
+        return None
+    if not isinstance(value, kind) or isinstance(value, bool) != (kind is bool):
+        raise community_parse_error()
+    return value
+
+
+def community_created_at(source: dict) -> str | None:
+    """The ISO 8601 UTC moment (to the second) of `source`'s `created_at`, which X gives in milliseconds since the epoch."""
+    created = community_field(source, "created_at", int)
+    if created is None:
+        return None
+    try:
+        return iso_utc(datetime.fromtimestamp(created // MILLISECONDS, timezone.utc))
+    except (OverflowError, OSError, ValueError):
+        raise community_parse_error() from None
+
+
+def community_of(result: dict) -> dict:
+    """The compact dict of a community's `result`; raises the parse failure for a field of the wrong type."""
+    topic = community_field(result, "primary_community_topic", dict)
+    rules = community_field(result, "rules", list) or []
+    if not all(isinstance(rule, dict) for rule in rules):
+        raise community_parse_error()
+    return {
+        "id": community_field(result, "rest_id", str, required=True),
+        "name": community_field(result, "name", str, required=True),
+        "description": community_field(result, "description", str) or "",
+        "rules": [
+            {
+                "name": community_field(rule, "name", str, required=True),
+                "description": community_field(rule, "description", str),
+            }
+            for rule in rules
+        ],
+        "member_count": community_field(result, "member_count", int),
+        "join_policy": community_field(result, "join_policy", str),
+        "topic": community_field(topic, "topic_name", str) if topic else None,
+        "nsfw": community_field(result, "is_nsfw", bool),
+        "created_at": community_created_at(result),
+        "is_member": community_field(result, "is_member", bool),
+    }
+
+
+@operation("community", check_args=check_community_args)
+async def read_community(api: Any, args: dict) -> dict | None:
+    """One community's details, or None when X gives no such community.
+
+    The one request is made here, with the variables and features twscrape's `community_info` sends. None means X
+    gave no such community to this account.
+    """
+    operation_id = importlib.import_module(f"{TWSCRAPE}.api").OP_CommunityQuery
+    rep = await request_reply(api, operation_id, {"communityId": args["id"]}, ft=COMMUNITY_FEATURES)
+    result = community_result_of(rep.json())
+    return community_of(result) if result is not None else None
+
+
+@operation("community_posts", check_args=check_community_posts_args)
+async def read_community_posts(api: Any, args: dict) -> dict | None:
+    """One page of a community's posts: `{"posts": [...], "cursor": str | None}`, or None when X gives no such community.
+
+    The one request is made here, with the variables twscrape's `community_tweets` sends (but for `count`): twscrape
+    pages inside a generator. The posts are those X lists, in the order it lists them, as many as `count`; a page
+    without posts has no cursor. None means X gave no such community to this account.
+    """
+    operation_id = importlib.import_module(f"{TWSCRAPE}.api").OP_CommunityTweetsTimeline
+    variables = with_cursor(
+        {
+            "communityId": args["id"],
+            "count": args["count"],
+            "rankingMode": args["ranking"],
+            **COMMUNITY_POSTS_VARIABLES,
+        },
+        args["cursor"],
+    )
+    timeline, tweets = await request_page(api, operation_id, variables)
+    result = community_result_of(timeline)
+    if result is None or not any(isinstance(result.get(key), dict) for key in COMMUNITY_TIMELINE_KEYS):
+        return None
+    return paged_posts(api, timeline, tweets, args["count"])
+
+
+@operation("community_members", check_args=check_community_members_args)
+async def read_community_members(api: Any, args: dict) -> dict | None:
+    """One page of a community's members: `{"users": [...], "cursor": str | None}`, or None when X gives no such community.
+
+    The one request is made here, with the variables twscrape's `community_members` sends (but for `count`): twscrape
+    pages inside a generator. The users are those X lists in `members_slice`, in the order it lists them, as many as
+    `count`; a page without users has no cursor. None means X gave no such community to this account.
+    """
+    operation_id = importlib.import_module(f"{TWSCRAPE}.api").OP_membersSliceTimeline_Query
+    variables = with_cursor(
+        {"communityId": args["id"], "count": args["count"], **COMMUNITY_MEMBERS_VARIABLES}, args["cursor"]
+    )
+    reply, parsed = await request_page(
+        api, operation_id, variables, parse=importlib.import_module(f"{TWSCRAPE}.models").parse_users
+    )
+    result = community_result_of(reply)
+    members = result.get(COMMUNITY_MEMBERS_KEY) if result is not None else None
+    if not isinstance(members, dict):
+        return None
+    by_id = {user.id_str: user for user in parsed}
+    items = members.get("items_results")
+    listed = [item.get("result") for item in items if isinstance(item, dict)] if isinstance(items, list) else []
+    ids = dict.fromkeys(str(user["rest_id"]) for user in listed if isinstance(user, dict) and "rest_id" in user)
+    users = [by_id[user_id] for user_id in ids if user_id in by_id][: args["count"]]
+    slice_info = members.get("slice_info")
+    cursor = slice_info.get("next_cursor") if isinstance(slice_info, dict) else None
+    return {
+        "users": [user_of(user) for user in users],
+        "cursor": cursor if users and isinstance(cursor, str) else None,
+    }
+
+
+def check_trends_args(args: dict) -> None:
+    """Raises `Failure("invalid_request")` unless `args` holds exactly a trend category, a count and a cursor.
+
+    The messages name the argument and never repeat its value.
+    """
+    if set(args) != TRENDS_ARGS:
+        raise Failure("invalid_request", "args does not hold exactly category, count and cursor")
+    category = args["category"]
+    if not isinstance(category, str) or category not in TREND_CATEGORIES:
+        raise Failure("invalid_request", f"args.category is not one of {', '.join(TREND_CATEGORIES)}")
+    check_count_arg(args["count"])
+    check_cursor_arg(args["cursor"])
+
+
+def dicts_of(value: Any) -> list[dict]:
+    """The objects of `value` when it is a list; none otherwise."""
+    return [element for element in value if isinstance(element, dict)] if isinstance(value, list) else []
+
+
+def trend_query(trend_url: Any) -> str | None:
+    """The search query of a trend's `trend_url`: its `query` or `rawQuery` request parameter, else the `query`
+    parameter of a `twitter://search/` URL; None when it holds neither."""
+    if not isinstance(trend_url, dict):
+        return None
+    options = trend_url.get("urtEndpointOptions")
+    for param in dicts_of(options.get("requestParams") if isinstance(options, dict) else None):
+        value = param.get("value")
+        if param.get("key") in TREND_QUERY_KEYS and isinstance(value, str) and value:
+            return value
+    url = trend_url.get("url")
+    if isinstance(url, str) and url.startswith(TREND_SEARCH_URL):
+        values = urllib.parse.parse_qs(urllib.parse.urlsplit(url).query).get("query")
+        return values[0] if values and values[0] else None
+    return None
+
+
+def trend_of(item: dict) -> dict | None:
+    """The compact dict of a `TimelineTrend`'s `itemContent`; None when it has no text `name`."""
+    name = item.get("name")
+    if not isinstance(name, str):
+        return None
+    metadata = item.get("trend_metadata")
+    metadata = metadata if isinstance(metadata, dict) else {}
+    trend_url = item.get("trend_url")
+    url = trend_url.get("url") if isinstance(trend_url, dict) else None
+    story = TREND_STORY_URL.fullmatch(url) if isinstance(url, str) else None
+    rank = item.get("rank")
+    context = metadata.get("domain_context")
+    return {
+        "name": name,
+        "rank": int(rank) if isinstance(rank, str) and DECIMAL_ID.fullmatch(rank) else None,
+        "context": context if isinstance(context, str) else None,
+        "grouped": [
+            group["name"]
+            for group in dicts_of(item.get("grouped_trends"))
+            if isinstance(group.get("name"), str)
+        ],
+        "query": trend_query(trend_url),
+        "story_id": story.group(1) if story else None,
+    }
+
+
+def trend_items_of(entry: Any) -> list[dict]:
+    """The `TimelineTrend` objects an entry holds: its own `itemContent`, or those of its module's items, in order."""
+    content = entry.get("content") if isinstance(entry, dict) else None
+    if not isinstance(content, dict):
+        return []
+    if isinstance(content.get("items"), list):
+        wrappers = [item.get("item") for item in dicts_of(content["items"])]
+        contents = [wrapper.get("itemContent") for wrapper in wrappers if isinstance(wrapper, dict)]
+    else:
+        contents = [content.get("itemContent")]
+    return [
+        found
+        for found in contents
+        if isinstance(found, dict) and TREND_TYPENAME in (found.get("__typename"), found.get("itemType"))
+    ]
+
+
+@operation("trends", check_args=check_trends_args)
+async def read_trends(api: Any, args: dict) -> dict:
+    """One page of X's Explore trends for a category: `{"trends": [...], "cursor": str | None}`.
+
+    The one request is made here, with the variables twscrape's `trends` sends (but for `count`): twscrape pages
+    inside a generator. The trends are those X lists, in the order it lists them (the stories of a module among
+    them, each with its `story_id`), once by name, as many as `count`; a page without trends has no cursor. A trend's
+    `query` is the search it opens, when its link holds one. Reads the reply itself, as twscrape's parser drops the
+    trends without a link and keeps nothing of the stories.
+    """
+    operation_id = importlib.import_module(f"{TWSCRAPE}.api").OP_GenericTimelineById
+    variables = with_cursor(
+        {"timelineId": TREND_TIMELINES[args["category"]], "count": args["count"], **TREND_VARIABLES}, args["cursor"]
+    )
+    reply = (await request_reply(api, operation_id, variables)).json()
+    data = reply.get("data") if isinstance(reply, dict) else None
+    holder = data.get("timeline") if isinstance(data, dict) else None
+    timeline = holder.get("timeline") if isinstance(holder, dict) else None
+    if not isinstance(timeline, dict):
+        raise getattr(importlib.import_module(TWSCRAPE), PARSE_ERRORS[0])(TREND_PARSE_MESSAGE)
+    trends = {}
+    for instruction in dicts_of(timeline.get("instructions")):
+        if instruction.get("type") != "TimelineAddEntries":
+            continue
+        for entry in dicts_of(instruction.get("entries")):
+            for item in trend_items_of(entry):
+                if (trend := trend_of(item)) is not None:
+                    trends.setdefault(trend["name"], trend)
+    return paged_items(api, timeline, list(trends.values()), args["count"], "trends", dict)
 
 
 def failure_kind(exc: Exception, twscrape: Any) -> str:

@@ -813,13 +813,74 @@ and every entry point checks them the same way.
   of a handle in 7 days takes two reads and the next ones one. Who liked a post
   is not among them (see "What the tools never read").
 
+## Lists
+
+- **A list is named by its id or its URL** (`x.com/i/lists/<id>`, also on
+  twitter.com), and read as its posts or its members: a page of posts and a
+  page of users, in the shapes of any post and any user.
+- **A list reads only through the reading account.** FxTwitter has no list
+  route, so `source: fxtwitter` is refused before anything is read and
+  `auto` goes to the account; every page is one read of it.
+- **A list the reading account cannot see fails as `not_found`, saying
+  so.** X shows a private list only to its owner and members, and its reply
+  for a hidden list is not told apart from one for a missing list, so the
+  message says it may be either, rather than reading as a list with no
+  posts.
+- **A list's own details are not read**: its name, description, owner and
+  member count. The engine has no operation for them, and one kept here
+  would break without notice when X changes it.
+
+## Communities
+
+- **A community is named by its id or its URL** (`x.com/i/communities/<id>`,
+  also on twitter.com), and read as itself, its posts or its members.
+- **A community reads only through the reading account**, as a list does:
+  FxTwitter gives a community only inside a post made in one, without its
+  rules or member count, and has no route for its posts or members.
+- **A community holds what X tells of it**: its name, description, rules,
+  member count, join policy, topic, whether it is marked NSFW, when it was
+  created, and whether the reading account is a member. The name is clipped
+  like a person's name, the description like a bio, each rule's name and
+  description alike, and `clipped` says what was cut. Its posts come by
+  relevance, X's default, or by recency (`order`).
+- **A community X does not give fails as `not_found`.** X answers a missing
+  or removed community as unavailable, without saying which, so the message
+  says it may be either; a community without its posts or members in the
+  reply fails the same way, rather than reading as an empty one.
+
+## Trends
+
+- **Trends are what X's Explore lists, by `category`**: `trending` (the
+  default), `news`, `sports` or `entertainment`. Not the reading account's
+  personalised For You, and not by a location a caller picks: X lists them
+  for the place it places the reader in, FxTwitter's for FxTwitter and the
+  reading account's for its own settings, which the result's `source` tells
+  apart.
+- **`trending` reads FxTwitter first; the other categories only the reading
+  account.** FxTwitter's `/2/trends` lists only `trending`, one page of at
+  most 50 and no cursor; the reading account pages every category. A
+  FxTwitter answer with no trends, or its 404 for an Explore page it could
+  not load, falls to the reading account under `auto`, since an Explore with
+  nothing trending is FxTwitter failing, not X.
+- **A trend holds its name, rank, context and grouped topics, and the words
+  to search it with.** `query` is what to pass to a post search: X's own
+  search query when it gives one, else the name. A story, X's written
+  summary of a topic, has a headline for a name and no search query; its
+  `query` is null and its `url` is the story's page. Names are clipped at
+  280 characters.
+- **No post count.** Neither source reports one as a value, only inside
+  display text, and a count read from display text breaks without notice
+  when X rewords it.
+
 ## What the tools never read
 
 - **Spaces, and likes**: who liked a post and an account's likes, which X
   made private in 2024. Like counts stay in every post.
 - **The reading account's own data**: its home timeline, notifications,
-  bookmarks, lists, direct messages and scheduled posts. They are the reading
-  account's, not the user's, and nothing a caller asks for needs them.
+  bookmarks, the lists and communities it owns or joined, direct messages and
+  scheduled posts. They are the reading account's, not the user's, and nothing
+  a caller asks for needs them; a list or community named by id reads like
+  any other.
 
 ## Files
 

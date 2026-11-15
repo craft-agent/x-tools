@@ -4,7 +4,7 @@ import type { Reader } from "./reader"
 import type { Answerer, Source } from "./source"
 
 /** Why FxTwitter's own answer may be bettered by the reading account. */
-type FallbackReason = "protected" | "logged_out"
+type FallbackReason = "protected" | "logged_out" | "empty"
 
 /** What a read of FxTwitter came to. */
 export type FxOutcome<T> =
