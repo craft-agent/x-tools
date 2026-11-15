@@ -11,6 +11,7 @@ export const USER_READ = "x_user_read"
 export const LIST_READ = "x_list_read"
 export const COMMUNITY_READ = "x_community_read"
 export const TREND_READ = "x_trend_read"
+export const MEDIA_DOWNLOAD = "x_media_download"
 
 /** The reads of each tool that only the reading account may answer, so they never reach FxTwitter or X: none is set up in the empty state directory. */
 export const ACCOUNT_ONLY_READS = [

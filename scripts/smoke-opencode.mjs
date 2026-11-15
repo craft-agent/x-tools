@@ -8,6 +8,7 @@ import {
   ACCOUNT_READ,
   COMMUNITY_READ,
   LIST_READ,
+  MEDIA_DOWNLOAD,
   POST_READ,
   TREND_READ,
   USER_READ,
@@ -59,7 +60,7 @@ try {
   console.log(`The OpenCode plugin ${plugin.id} exports setup and server.`)
 
   const expected = (await mcpToolNames(stateDir)).sort()
-  for (const name of [ACCOUNT_READ, POST_READ, USER_READ, LIST_READ, COMMUNITY_READ, TREND_READ]) {
+  for (const name of [ACCOUNT_READ, POST_READ, USER_READ, LIST_READ, COMMUNITY_READ, TREND_READ, MEDIA_DOWNLOAD]) {
     expect(expected.includes(name), `Expected the MCP registry to include ${name}.`)
   }
 

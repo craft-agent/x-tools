@@ -9,6 +9,7 @@ import {
   COMMUNITY_READ,
   EXIT_USAGE,
   LIST_READ,
+  MEDIA_DOWNLOAD,
   POST_READ,
   TREND_READ,
   UNKNOWN_TOOL,
@@ -41,6 +42,12 @@ async function listsTheServersTools() {
         `Expected ${label} to include ${id} as a read tool, got ${run.stdout}`,
       )
     }
+    const download = listed.find((tool) => tool.id === MEDIA_DOWNLOAD)
+    const readOnly = settings.includes("--read-only")
+    expect(
+      readOnly ? download === undefined : download?.class === "add",
+      `Expected ${label} to ${readOnly ? "omit" : "include as an add tool"} ${MEDIA_DOWNLOAD}, got ${run.stdout}`,
+    )
     const expected = await mcpToolNames(stateDir, settings)
     expect(
       JSON.stringify(listed.map((tool) => tool.id)) === JSON.stringify(expected),
