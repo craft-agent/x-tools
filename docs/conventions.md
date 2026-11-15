@@ -611,6 +611,17 @@ and every entry point checks them the same way.
   pacing, what X last made of the session and a handle → user id cache. One
   directory per label means a label is moved, backed up or removed as a
   whole.
+- **The handle → user id cache is a label's, and short-lived.** X's reads of an
+  account's posts take its user id, not its handle, so a label remembers the ids
+  it looked up in `user-ids.json` (a private file, written atomically): each
+  entry holds the id and when it was read, is used for 7 days and then asked
+  again, and the file keeps at most 200 handles, dropping the oldest. With an id
+  remembered an account's posts take one read of X instead of two; a handle can
+  change hands, so an entry that outlived a week could read the wrong account.
+  It is a cache: a missing, unreadable or malformed file reads as empty, a failed
+  write is ignored, and there is no lock, since two writers at once only lose an
+  entry. Tools reach it through the reader, never the file, and removing a label
+  removes it with the directory.
 - **`account` picks the label.** Left out, it picks the only label; with
   several, the call fails as `invalid_argument` and lists them. One account is
   the common case and needs no argument, while several never depend on which
@@ -720,8 +731,9 @@ and every entry point checks them the same way.
 - **Every result names the source that answered it.** FxTwitter's answers
   are its operator's, read through its own access to X, and a caller weighing
   them should know which it got.
-- **A cursor is opaque and stays with its source and read**: it continues
-  only there, since the two sources page differently.
+- **A cursor is opaque and continues only on the source, the read and the
+  arguments that gave it.** The two sources page differently, and a cursor
+  reused with other words would page something else without saying so.
 - **The `account_only` setting turns FxTwitter off**, so reads go only to
   the reading account. What a read asks for (a search's words, the handles
   read) reaches a third party, which some users must not allow. It is a
@@ -743,6 +755,63 @@ and every entry point checks them the same way.
   and three failures in a row ending FxTwitter's part of a call. The settings
   let a user be gentler with a service they share; the fixed limits only keep
   a hung or runaway reply from holding a call.
+
+## Pages
+
+- **A paged read takes `limit` and `cursor`, and returns the next `cursor`**,
+  or null when there is no more. `limit` is 20 by default, 1 to 50. Every
+  paged read pages alike, so a caller follows one rule for all of them.
+- **`limit` is an upper bound, and a page may hold fewer with more to
+  come.** A page is one request to its source, and X ends most pages near 20
+  items whatever is asked, so a caller follows `cursor`, not the count.
+  Filling a page would spend several reads of the reading account.
+- **A read whose sources set the page size themselves takes no `limit`**: a
+  conversation's replies come as the source cuts them, and cutting a page
+  would lose the posts between it and the next cursor. It still takes
+  `cursor`. A read that is no list, such as a thread, which X gives whole,
+  takes neither `limit` nor `cursor`.
+- **Through the reading account a page is one request to X and counts as one
+  read**, so the pacing and the caps count pages as they count every read.
+- **A list asks FxTwitter for `limit` items**, under the one reply cap: a
+  larger ask would only reach the cap, and FxTwitter ends its pages by itself.
+
+## Posts
+
+- **Every post carries `read_at`**, the time the source answered it, so reads
+  taken at different times compare: counts and notes change.
+- **Every post carries `community_note`**, the note X shows on it: `shown`
+  with its text, `none`, or `unknown` when the source cannot tell. The reading
+  account does not report notes, so a post read there is `unknown`, and a post
+  read where notes are not told never reads as one without a note.
+- **A note's text is other people's text like the post's**, so it is clipped
+  like it and the result says where.
+
+## Users
+
+- **A profile holds what the account says of itself and what X counts of it**:
+  `id`, `handle`, `name`, `url`, the `bio`, the `links` (its website, then the
+  links in its bio), `location`, `joined` (ISO 8601 in UTC to the second), the
+  `counts` (`followers`, `following`, `posts`, `likes`, `media`), `protected`,
+  `verified`, `verified_type` and the `avatar_url` and `banner_url`. A field a
+  source does not tell is `null`, never a guess: a count is `null`, not 0.
+- **Every user carries `read_at`**, the time the source answered it, like a
+  post: counts and bios change.
+- **Names, bios, locations and links are other people's text**, so they are
+  clipped and the result says where in `clipped`: a name at 50 characters, a
+  bio at 600 and five links, counted in code points.
+- **`verified` means any checkmark, and `verified_type` says which.** X's
+  legacy mark and its paid one are told apart by sources in different ways, so
+  `verified` is true for either and the kind (`government`, `business`, …,
+  lowercased) is a separate field, `null` when the source tells none.
+- **A profile read through the reading account remembers the handle's user
+  id**, as "Accounts and state" describes, so a `timeline` of that handle
+  through the same label takes one read instead of two.
+- **Three lists name other accounts: `followers` and `following` of a handle,
+  and the `reposters` of a post.** Each is a page of users, as a search is,
+  and reads like every paged read. An account's followers or following
+  through the reading account need its user id, as its posts do: the first read
+  of a handle in 7 days takes two reads and the next ones one. Who liked a post
+  is not among them (see "What the tools never read").
 
 ## What the tools never read
 

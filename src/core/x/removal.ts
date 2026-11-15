@@ -55,7 +55,7 @@ async function requireSameDir(paths: LabelPaths, stateDir: string, identity: Dir
 
 /**
  * Removes one reading account's local state: its cookie file, the reads
- * counted and X's remembered verdicts. This deletes local files only, and
+ * counted, X's remembered verdicts and its handle → user id cache. This deletes local files only, and
  * sends nothing to X.
  *
  * The label must exist as a real directory (`not_found`, `invalid_argument`).

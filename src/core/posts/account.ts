@@ -9,6 +9,7 @@ import {
   nullishCountsShape,
   nullishNumber,
   postUrl,
+  readAtOf,
   unexpectedReplyError,
   type Post,
   type Quote,
@@ -59,12 +60,14 @@ function mapQuote(tweet: AccountQuote): Quote {
 }
 
 /**
- * The post the bridge's `post` operation gave, in the same shape and clipping
- * as FxTwitter's: the date normalized to UTC (`…Z`), a count it did not give
- * null, a size and an alt text it never has null. Data off the operation's
- * shape throws `upstream_error` with `details.reason` `unexpected_reply`.
+ * The post the bridge's `post` operation gave, read at `readAt` (ISO 8601
+ * UTC), in the same shape and clipping as FxTwitter's: the date normalized to
+ * UTC (`…Z`), a count it did not give null, a size and an alt text it never
+ * has null, and a community note that is `unknown`, since the reading account
+ * does not report notes. Data off the operation's shape throws
+ * `upstream_error` with `details.reason` `unexpected_reply`.
  */
-export function accountPost(data: unknown): Post {
+export function accountPost(data: unknown, readAt: string): Post {
   const parsed = accountPostSchema.safeParse(data)
   if (!parsed.success) throw unexpectedReplyError("account", { cause: parsed.error })
   const { reply_to: replyTo, quote } = parsed.data
@@ -72,6 +75,8 @@ export function accountPost(data: unknown): Post {
     ...mapQuote(parsed.data),
     reply_to: replyTo ? { id: replyTo.id, handle: replyTo.username ?? null } : null,
     quote: quote ? mapQuote(quote) : null,
+    read_at: readAt,
+    community_note: { status: "unknown", text: null },
   })
 }
 
@@ -80,11 +85,12 @@ export function accountPost(data: unknown): Post {
  * out): one paced read of the bridge's `post` operation. No tweet from X is
  * `not_found`, since the reading account cannot tell a post that is gone from
  * one it may not see. Throws `invalid_argument` for an `id` that is not a
- * decimal number.
+ * decimal number. The post's `read_at` is the time the reader's clock tells
+ * as the bridge answers.
  */
 export async function readPostFromAccount(reader: Reader, id: string, account?: string): Promise<PostLookup> {
   assertPostId(id)
   const { data } = await reader.account("post", { id }, account)
   if (data === null) return { status: "not_found", reason: "not_found" }
-  return { status: "ok", post: accountPost(data) }
+  return { status: "ok", post: accountPost(data, readAtOf(reader.now())) }
 }

@@ -1,7 +1,8 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test"
 import { sourcesFixture, type SourcesFixture } from "../sources/sources.testing"
 import { removeTempDirs } from "../x/engine.testing"
-import { UNTRUSTED_NOTE } from "./schemas"
+import { NO_NOTE, UNKNOWN_NOTE, fxNote } from "./posts.testing"
+import { UNTRUSTED_NOTE, postReadOutput } from "./schemas"
 import {
   accountPostData,
   readerAnswering,
@@ -135,6 +136,48 @@ describe("viewPosts: what it reads", () => {
     const { posts } = await viewPosts(view(["20"]), reader)
     expect(posts[0]).toMatchObject({ status: "ok", source: "account" })
     expect(h.fake.requests).toEqual([])
+  })
+})
+
+describe("viewPosts: when a post was read and its community note", () => {
+  const CLOCK = Date.parse("2026-02-03T04:05:06.789Z")
+  const CLOCK_AT = "2026-02-03T04:05:06Z"
+
+  test("a post from FxTwitter carries the clock's time and the note FxTwitter holds, as the schema writes it", async () => {
+    routePost(h, "20", "ada_writes", { community_note: fxNote("Context.") })
+    routePost(h, "21")
+    const cases = [
+      { id: "20", readAt: CLOCK_AT, note: { status: "shown", text: "Context." } },
+      { id: "21", readAt: "2026-02-03T04:06:06Z", note: NO_NOTE },
+    ]
+    for (const [index, { id, readAt, note }] of cases.entries()) {
+      // A minute apart, so that FxTwitter's gap between reads does not move the second stamp.
+      h.clock.time = CLOCK + index * 60_000
+      const result = await viewPosts(view([id]), h.reader())
+      expect(result.posts[0]!.post).toMatchObject({ read_at: readAt, community_note: note })
+      expect(postReadOutput.parse(result)).toEqual(result)
+    }
+  })
+
+  test("a post from the reading account carries the clock's time and an unknown note", async () => {
+    await h.label()
+    h.clock.time = CLOCK
+    const { posts } = await viewPosts(
+      view(["20"], { source: "account" }),
+      readerAnswering(h, { "20": accountPostData("20") }),
+    )
+    expect(posts[0]!.post).toMatchObject({ read_at: CLOCK_AT, community_note: UNKNOWN_NOTE })
+  })
+
+  test("each post is stamped when it is answered, not when the reader was made", async () => {
+    routePost(h, "20")
+    routePost(h, "21")
+    const reader = h.reader()
+    const first = await viewPosts(view(["20"]), reader)
+    h.clock.time += 60_000
+    const second = await viewPosts(view(["21"]), reader)
+    expect(first.posts[0]!.post!.read_at).toBe("2026-01-01T00:00:00Z")
+    expect(second.posts[0]!.post!.read_at).toBe("2026-01-01T00:01:00Z")
   })
 })
 

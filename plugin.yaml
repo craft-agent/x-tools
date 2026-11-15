@@ -9,6 +9,7 @@ provides_tools:
   - x_grant_read
   - x_grant_revoke
   - x_post_read
+  - x_user_read
 provides_hooks:
   - pre_tool_call
 config_schema:

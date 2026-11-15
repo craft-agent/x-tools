@@ -141,6 +141,19 @@ describe("callEngine's reply", () => {
     expect(await call(engine)).toEqual(reply)
   })
 
+  test("returns a search_refused failure as a reply", async () => {
+    const engine = await fakeEngine()
+    const reply = {
+      ...BASE_REPLY,
+      ok: false,
+      kind: "search_refused",
+      error: "search refused",
+      contacted: true,
+    } as const
+    await engine.reply(reply)
+    expect(await call(engine)).toEqual(reply)
+  })
+
   test("noise on stderr beside a reply on stdout is still a reply", async () => {
     const engine = await fakeEngine()
     await engine.reply(OK_REPLY)

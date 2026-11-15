@@ -8,6 +8,7 @@ import type { ToolContext } from "../tool"
 import { listLabels, pickLabel } from "../x/labels"
 import { DEFAULT_LOCK_WAIT_MS } from "../x/read-lock"
 import { readX, type ReadOptions } from "../x/read"
+import { readUserId, writeUserId } from "../x/user-ids"
 import { accountOnly } from "./source"
 
 /** How long one tool call may spend reading, over both sources. */
@@ -36,6 +37,8 @@ export type ReaderOverrides = {
 export type Reader = {
   /** Whether the `account_only` setting turns FxTwitter off. */
   readonly accountOnly: boolean
+  /** The clock in epoch milliseconds that the call's budget and the sources' pacing run on. */
+  now(): number
   /** The milliseconds left of the call's budget, never below 0. */
   remainingMs(): number
   /** Throws `rate_limited` (`details.reason: "call_budget"`) when no time is left. */
@@ -48,6 +51,10 @@ export type Reader = {
   checkAccount(account?: string): Promise<void>
   /** One read of X through the reading account `account` (the only one when left out), after the budget check. */
   account(op: string, args: Readonly<Record<string, unknown>>, account?: string): Promise<AccountAnswer>
+  /** The user id the reading account `account` (the only one when left out) remembers for `handle` and still trusts, else null; reads local state only. Throws as a read of `account` would when the label is not one, is not set up, or is left out among several. */
+  userId(handle: string, account?: string): Promise<string | null>
+  /** Remembers that `handle` is user `id` for the reading account `account`; a cache, so a label that is gone or a write that fails is ignored. */
+  rememberUserId(handle: string, id: string, account?: string): Promise<void>
 }
 
 function budgetError(): ToolError {
@@ -105,6 +112,7 @@ export function createReader(ctx: ToolContext, overrides: ReaderOverrides = {}):
 
   return {
     accountOnly: onlyAccount,
+    now,
     remainingMs,
     checkBudget,
     fxtwitter: () => (client ??= makeClient()),
@@ -133,6 +141,16 @@ export function createReader(ctx: ToolContext, overrides: ReaderOverrides = {}):
         sleep: overrides.sleep,
         lockWaitMs: lockWaitMs(),
       })
+    },
+    async userId(handle, account) {
+      return readUserId(await pickLabel(stateDir, account), handle, now())
+    },
+    async rememberUserId(handle, id, account) {
+      try {
+        await writeUserId(await pickLabel(stateDir, account), handle, id, now())
+      } catch {
+        // A cache: the label may be gone, and the next read asks X again.
+      }
     },
   }
 }

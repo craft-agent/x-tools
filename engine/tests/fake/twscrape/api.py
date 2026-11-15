@@ -1,13 +1,45 @@
-"""The fake API: it records how it was built, holds the pool and answers `tweet_details` from a script."""
+"""The fake API: it records how it was built, holds the pool and answers `tweet_details`, `user_by_login` and
+`_gql_item` from a script."""
 
 from .accounts_pool import AccountsPool
-from .models import Tweet
+from .models import Tweet, User
+from .utils import find_obj, get_by_path
+
+OP_Followers = "Xe3y9_ndZ9-RtWz8zd_wpg/Followers"
+OP_Following = "eDqlbOS46zda8jDT8dEQ_Q/Following"
+OP_Retweeters = "VzgCyBwfqzAvPjK2E4U2vA/Retweeters"
+OP_SearchTimeline = "vLHjqbDv7TPFMBkIIO1nOA/SearchTimeline"
+OP_TweetDetail = "dQDdKtt882nl-Km98FJGSQ/TweetDetail"
+OP_UserMedia = "iTSlWbsmD00dAE7Sk9xvIw/UserMedia"
+OP_UserTweets = "D6z-FJI2pKuwEeYYxVIGbg/UserTweets"
+OP_UserTweetsAndReplies = "FmuxExUC21Xn_C2NwtX5sQ/UserTweetsAndReplies"
+ARTICLE_FIELD_TOGGLES = {
+    "withArticleRichContentState": True,
+    "withArticlePlainText": False,
+    "withArticleSummaryText": True,
+    "withArticleVoiceOver": True,
+    "withGrokAnalyze": False,
+    "withDisallowedReplyControls": False,
+}
 
 CONSTRUCTED: list[dict] = []
 # The tweets `tweet_details` answers with, by id; an id that is not here is a tweet X does not give.
+# `parse_tweets` finds the tweets of a timeline here too.
 TWEETS: dict[int, Tweet] = {}
 # The ids `tweet_details` was asked for, in order.
 TWEET_DETAILS: list[int] = []
+# The accounts `user_by_login` answers with, by handle; a handle that is not here is an account X does not show.
+USERS: dict[str, User] = {}
+# The accounts `parse_users` finds in a timeline, by id; an id that is not here is skipped.
+PEOPLE: dict[int, User] = {}
+# The handles `user_by_login` was asked for, in order.
+USER_LOGINS: list[str] = []
+# What `_gql_item` was asked, in order: `{"op", "kv", "ft", "toggles"}`.
+GQL_ITEMS: list[dict] = []
+# What `_gql_item` answers with: an object with `.json()`, or None as when no account is usable.
+GQL_REPLY: object | None = None
+# An exception `_gql_item` raises instead of answering; `user_by_login`, which twscrape makes with `_gql_item`, raises it too.
+GQL_ERROR: Exception | None = None
 
 
 class API:
@@ -27,3 +59,30 @@ class API:
     async def tweet_details(self, twid: int, kv=None) -> Tweet | None:
         TWEET_DETAILS.append(twid)
         return TWEETS.get(twid)
+
+    async def user_by_login(self, login: str, kv=None) -> User | None:
+        USER_LOGINS.append(login)
+        if GQL_ERROR is not None:
+            raise GQL_ERROR
+        return USERS.get(login)
+
+    async def _gql_item(self, op: str, kv: dict, ft: dict | None = None, toggles: dict | None = None):
+        GQL_ITEMS.append({"op": op, "kv": kv, "ft": ft, "toggles": toggles})
+        if GQL_ERROR is not None:
+            raise GQL_ERROR
+        return GQL_REPLY
+
+    def _get_cursor(self, obj: dict, cursor_type="Bottom") -> str | None:
+        cur = find_obj(obj, lambda x: x.get("cursorType") == cursor_type)
+        value = cur.get("value") if cur else get_by_path(obj, "next_cursor")
+        return value if isinstance(value, str) else None
+
+    def _gql_entries(self, obj: dict) -> list:
+        els = get_by_path(obj, "entries") or get_by_path(obj, "items_results") or []
+        if els and "entryId" in (els[0] or {}):
+            els = [
+                x
+                for x in els
+                if not x["entryId"].startswith(("cursor-", "messageprompt-", "module-", "who-to-follow-"))
+            ]
+        return els

@@ -28,6 +28,13 @@ describe("pacedCall counts a read only when X may have been contacted", () => {
     expect((await fixture.state()).calls).toEqual([T0])
   })
 
+  test("search_refused is counted as a read and remembers no refused session", async () => {
+    const session = { active: true, error: null, locks: {} }
+    const fixture = await pacedFixture(failedReply("search_refused", true, session))
+    expect(await fixture.run()).toMatchObject({ ok: false, kind: "search_refused", contacted: true })
+    expect(await fixture.state()).toEqual({ calls: [T0], refused: null, rate_limited_until: null })
+  })
+
   test("a child that died without a reply is counted, and its error is rethrown", async () => {
     const fixture = await pacedFixture(null)
     await fixture.engine.set("stderr", "Traceback\nValueError: boom\n")

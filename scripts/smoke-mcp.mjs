@@ -4,16 +4,9 @@ import { spawnSync } from "node:child_process"
 import { mkdtempSync, readdirSync, rmSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
-import { fileURLToPath } from "node:url"
 import { PLUGIN_NAME } from "./package-name.mjs"
+import { ACCOUNT_ONLY_READS, ACCOUNT_READ, EXIT_USAGE, SERVER, UNKNOWN_TOOL } from "./smoke-shared.mjs"
 
-const SERVER = fileURLToPath(new URL("../dist/mcp.js", import.meta.url))
-const EXIT_USAGE = 2
-const UNKNOWN_TOOL = "unknown_nonexistent_read"
-const ACCOUNT_READ = "x_account_read"
-const POST_READ = "x_post_read"
-/** A read that only the reading account may answer, so that it never reaches FxTwitter or X: none is set up in the empty state directory. */
-const POST_VIEW_ACCOUNT_ONLY = { method: "view", posts: ["20"], source: "account" }
 const stateDir = mkdtempSync(join(tmpdir(), "mcp-smoke-"))
 
 function expectReadTool(tools, name) {
@@ -54,11 +47,17 @@ async function listTools() {
     expectEmptyStateDir("Account reads must not create state.")
     console.log(`${ACCOUNT_READ} returns no accounts and a missing engine from an empty state directory.`)
 
-    expectReadTool(tools, POST_READ)
-    const view = await client.callTool({ name: POST_READ, arguments: POST_VIEW_ACCOUNT_ONLY })
-    expectErrorResult(view, "not_found", `${POST_READ} with no reading account`)
-    expectEmptyStateDir("Post reads without a reading account must not create state.")
-    console.log(`${POST_READ} view with source account gives a not_found error result and no reading account.`)
+    for (const [tool, reads] of ACCOUNT_ONLY_READS) {
+      expectReadTool(tools, tool)
+      for (const args of reads) {
+        const result = await client.callTool({ name: tool, arguments: args })
+        expectErrorResult(result, "not_found", `${tool} ${args.method} with no reading account`)
+      }
+      expectEmptyStateDir(`${tool} reads without a reading account must not create state.`)
+      console.log(
+        `${tool} ${reads.map(({ method }) => method).join(", ")} with source account give a not_found error result and no reading account.`,
+      )
+    }
 
     const result = await client.callTool({ name: UNKNOWN_TOOL })
     expectErrorResult(result, "invalid_argument", UNKNOWN_TOOL)
