@@ -11,6 +11,7 @@ provides_tools:
   - x_grant_revoke
   - x_list_read
   - x_post_read
+  - x_trend_read
   - x_user_read
 provides_hooks:
   - pre_tool_call
