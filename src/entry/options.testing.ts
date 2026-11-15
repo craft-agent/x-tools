@@ -25,6 +25,22 @@ export const stateSpec: ToolSpec = defineTool({
   },
 })
 
+export const DOWNLOAD_ID = "demo_download_read"
+
+/** A read tool of `alpha` that returns the download directory its call got. */
+export const downloadSpec: ToolSpec = defineTool({
+  id: DOWNLOAD_ID,
+  title: DOWNLOAD_ID,
+  description: DOWNLOAD_ID,
+  toolset: "alpha",
+  class: "read",
+  input: z.object({}),
+  output: z.object({ download_dir: z.string().optional() }),
+  async execute(_args, ctx) {
+    return { download_dir: ctx.downloadDir }
+  },
+})
+
 /** An add tool of `alpha` that returns `ctx.options` and shows the note option as a fact of its description. */
 export const noteSpec: ToolSpec = defineTool({
   id: NOTE_ID,

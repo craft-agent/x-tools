@@ -21,7 +21,7 @@ import {
   type PostLookup,
 } from "./shape"
 
-const STATUS_PATH = "/2/status/"
+export const STATUS_PATH = "/2/status/"
 
 export const HTTP_OK = 200
 const HTTP_BAD_REQUEST = 400
@@ -158,7 +158,7 @@ export function fxPost(status: unknown, readAt: string): Post {
 }
 
 /** The `status` field of a reply's body; throws `unexpected_reply` for a body that is not an object holding one. */
-function statusField(body: unknown, httpStatus: number): unknown {
+export function statusField(body: unknown, httpStatus: number): unknown {
   if (typeof body !== "object" || body === null || !("status" in body)) {
     throw unexpectedReplyError("fxtwitter", { status: httpStatus })
   }

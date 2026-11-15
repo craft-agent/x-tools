@@ -8,6 +8,7 @@ import {
   ACCOUNT_READ,
   COMMUNITY_READ,
   LIST_READ,
+  MEDIA_DOWNLOAD,
   POST_READ,
   TREND_READ,
   USER_READ,
@@ -59,7 +60,7 @@ try {
   console.log(`The OpenCode plugin ${plugin.id} exports setup and server.`)
 
   const expected = (await mcpToolNames(stateDir)).sort()
-  for (const name of [ACCOUNT_READ, POST_READ, USER_READ, LIST_READ, COMMUNITY_READ, TREND_READ]) {
+  for (const name of [ACCOUNT_READ, POST_READ, USER_READ, LIST_READ, COMMUNITY_READ, TREND_READ, MEDIA_DOWNLOAD]) {
     expect(expected.includes(name), `Expected the MCP registry to include ${name}.`)
   }
 
@@ -82,7 +83,7 @@ try {
     JSON.stringify(registered) === JSON.stringify(expected),
     `Expected setup to register ${JSON.stringify(expected)}, got ${JSON.stringify(registered)}.`,
   )
-  for (const id of ["x-account", "x-posts", "x-users", "x-lists", "x-communities", "x-trends"]) {
+  for (const id of ["x-account", "x-posts", "x-users", "x-lists", "x-communities", "x-trends", "x-media"]) {
     expect(skills.includes(id), `Expected setup to register ${id}, got ${JSON.stringify(skills)}.`)
   }
   console.log(`setup registers ${added.size} tools (as many as the MCP server lists) and ${skills.length} skills.`)

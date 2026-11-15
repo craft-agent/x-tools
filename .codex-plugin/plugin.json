@@ -1,7 +1,7 @@
 {
   "name": "x-tools",
   "version": "0.0.0",
-  "description": "Unofficial, read-only X tools for coding agents: search, threads, profiles, media and post checks.",
+  "description": "Unofficial X tools for coding agents: read posts and profiles, save post media, never write to X.",
   "author": {
     "name": "craftsamo",
     "url": "https://github.com/craft-agent"
@@ -25,6 +25,7 @@
         "X_TOOLS_UNATTENDED",
         "X_TOOLS_GRANTS_DIR",
         "X_TOOLS_STATE_DIR",
+        "X_TOOLS_DOWNLOAD_DIR",
         "X_TOOLS_READ_GAP_SECONDS",
         "X_TOOLS_READS_PER_HOUR",
         "X_TOOLS_READS_PER_DAY",

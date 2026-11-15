@@ -5,7 +5,7 @@ import { mkdtempSync, readdirSync, rmSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { PLUGIN_NAME } from "./package-name.mjs"
-import { ACCOUNT_ONLY_READS, ACCOUNT_READ, EXIT_USAGE, SERVER, UNKNOWN_TOOL } from "./smoke-shared.mjs"
+import { ACCOUNT_ONLY_READS, ACCOUNT_READ, EXIT_USAGE, MEDIA_DOWNLOAD, SERVER, UNKNOWN_TOOL } from "./smoke-shared.mjs"
 
 const stateDir = mkdtempSync(join(tmpdir(), "mcp-smoke-"))
 
@@ -13,6 +13,13 @@ function expectReadTool(tools, name) {
   const tool = tools.find((entry) => entry.name === name)
   if (tool?.annotations?.readOnlyHint !== true) {
     throw new Error(`Expected ${name} to be listed by default with readOnlyHint, got ${JSON.stringify(tool)}`)
+  }
+}
+
+function expectAddTool(tools, name) {
+  const tool = tools.find((entry) => entry.name === name)
+  if (tool?.annotations?.readOnlyHint !== false || tool.annotations.destructiveHint !== false) {
+    throw new Error(`Expected ${name} to be listed by default as an add tool, got ${JSON.stringify(tool)}`)
   }
 }
 
@@ -39,6 +46,7 @@ async function listTools() {
     console.log(`The MCP server ${serverName} lists ${tools.length} tools.`)
 
     expectReadTool(tools, ACCOUNT_READ)
+    expectAddTool(tools, MEDIA_DOWNLOAD)
     const read = await client.callTool({ name: ACCOUNT_READ, arguments: {} })
     const report = read.structuredContent
     if (read.isError || report?.accounts?.length !== 0 || report.engine?.status !== "missing") {

@@ -13,6 +13,7 @@ import {
   type Translator,
 } from "../core"
 import { DESCRIBE_TIMEOUT_MS, approvalPrompt, standIn, type ShownDescription } from "../entry/description"
+import { downloadDirContext, type DownloadDirContext } from "../entry/download-dir"
 import { errorText } from "../entry/errors"
 import { ANY_RESOURCE } from "../entry/permission"
 import { checkPin } from "../entry/pin"
@@ -71,13 +72,15 @@ export function needsPermission(spec: Pick<ToolSpec, "class">): boolean {
 /**
  * The tools the plugin options (and the environment behind them) select from
  * `specs`, the translator of the prompt language they set over the plugin's
- * translations, the package's own settings, the grants' context and the state directory.
+ * translations, the package's own settings, the grants' context and the state
+ * and download directories.
  */
 export function selectedTools(
   specs: ToolSpec[],
   options: PluginOptions | undefined,
   deps: PluginDeps,
-): { specs: ToolSpec[]; translator: Translator; options: ToolOptions; grants: GrantContext } & StateDirContext {
+): { specs: ToolSpec[]; translator: Translator; options: ToolOptions; grants: GrantContext } & StateDirContext &
+  DownloadDirContext {
   const profile = deps.profile ?? PROJECT_PROFILE
   const settings = settingsFromOptions(options, deps.env ?? process.env, profile)
   return {
@@ -86,6 +89,7 @@ export function selectedTools(
     options: settings.options,
     grants: settings.grants,
     ...stateDirContext(settings),
+    ...downloadDirContext(settings),
   }
 }
 

@@ -32,6 +32,7 @@ function v2Tool(
   options: ToolOptions,
   grants: GrantContext,
   stateDir: string,
+  downloadDir: string,
   runtime: ToolRuntime,
 ): V2Tool {
   return {
@@ -48,7 +49,7 @@ function v2Tool(
             `invalid_argument: The session's directory could not be read, so ${spec.id} cannot tell what it changes; retry.`,
           )
         }
-        const toolContext = { cwd: directory, ownDir, options, grants, stateDir, runtime, signal }
+        const toolContext = { cwd: directory, ownDir, options, grants, stateDir, downloadDir, runtime, signal }
         const approval = await approvalOf(spec, input, toolContext, DESCRIBE_TIMEOUT_MS, t)
         if (approval.refused) throw harnessError(approval.refused)
         const { resources, description } = approval
@@ -64,7 +65,7 @@ function v2Tool(
       const result = await runTool(
         spec,
         input,
-        { cwd: directory ?? process.cwd(), ownDir, options, grants, stateDir, runtime, signal },
+        { cwd: directory ?? process.cwd(), ownDir, options, grants, stateDir, downloadDir, runtime, signal },
         pin,
       )
       return { content: JSON.stringify(result), output: result }
@@ -104,6 +105,7 @@ export function createV2Setup(specs: ToolSpec[], deps: PluginDeps = {}): OpenCod
         selected.options,
         selected.grants,
         selected.stateDir,
+        selected.downloadDir,
         runtime,
       ),
     )

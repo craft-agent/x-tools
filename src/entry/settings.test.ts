@@ -20,6 +20,7 @@ describe("settingVariables", () => {
       "DEMO_GRANTS_DIR",
       "DEMO_NOTE_TEXT",
       "DEMO_STATE_DIR",
+      "DEMO_DOWNLOAD_DIR",
     ])
   })
 
