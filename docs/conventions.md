@@ -830,6 +830,24 @@ and every entry point checks them the same way.
   member count. The engine has no operation for them, and one kept here
   would break without notice when X changes it.
 
+## Communities
+
+- **A community is named by its id or its URL** (`x.com/i/communities/<id>`,
+  also on twitter.com), and read as itself, its posts or its members.
+- **A community reads only through the reading account**, as a list does:
+  FxTwitter gives a community only inside a post made in one, without its
+  rules or member count, and has no route for its posts or members.
+- **A community holds what X tells of it**: its name, description, rules,
+  member count, join policy, topic, whether it is marked NSFW, when it was
+  created, and whether the reading account is a member. The name is clipped
+  like a person's name, the description like a bio, each rule's name and
+  description alike, and `clipped` says what was cut. Its posts come by
+  relevance, X's default, or by recency (`order`).
+- **A community X does not give fails as `not_found`.** X answers a missing
+  or removed community as unavailable, without saying which, so the message
+  says it may be either; a community without its posts or members in the
+  reply fails the same way, rather than reading as an empty one.
+
 ## What the tools never read
 
 - **Spaces, and likes**: who liked a post and an account's likes, which X
