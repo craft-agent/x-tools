@@ -913,7 +913,19 @@ and every entry point checks them the same way.
 
 - **Media are written only under the directory a setting names**, judged by
   real path, never inside the state directory or the tools' own install
-  directory. The setting and its default are settled with the media tool.
+  directory. The setting is `download_dir`, and its default is
+  `~/Downloads/<name>`, where a person looks for what they saved; the entry
+  point resolves it, as it does the state directory, so `src/core` never
+  learns the package's name.
+- **A post's media go to `<download_dir>/<post id>/`**, named
+  `<post id>-<n>.<ext>`, a quoted post's with its own id. A download
+  directory inside the state or install directory is refused before any
+  prompt, judged by the real path of the part that exists, and again once it
+  is created; a post folder that is a symlink, or resolves anywhere but
+  directly inside the download directory, is refused.
+- **The prompt names the post and the folder from the arguments alone.**
+  Reading the post to describe it would spend a read on every prompt and
+  another on the run; the media found are in the result.
 
 ## Toolsets
 
