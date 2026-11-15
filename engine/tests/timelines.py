@@ -53,6 +53,23 @@ def module_entry(*ids: int) -> dict:
     }
 
 
+def conversation_module_entry(module_id: int, *tweet_ids: int, prefix: str = "list-conversation") -> dict:
+    """A module entry as X writes a list's conversations: each item's entry id holds the tweet id."""
+    return {
+        "entryId": f"{prefix}-{module_id}",
+        "content": {
+            "entryType": "TimelineTimelineModule",
+            "items": [
+                {
+                    "entryId": f"{prefix}-{module_id}-tweet-{id}",
+                    "item": {"itemContent": {"tweet_results": {"result": tweet_object(id)}}},
+                }
+                for id in tweet_ids
+            ],
+        },
+    }
+
+
 def cursor_entry(value: str, cursor_type: str = "Bottom") -> dict:
     return {
         "entryId": f"cursor-{cursor_type.lower()}-1",
@@ -64,3 +81,9 @@ def page(*entries: dict) -> Reply:
     """A page whose timeline lists `entries` in one `TimelineAddEntries` instruction."""
     instructions = [{"type": "TimelineAddEntries", "entries": list(entries)}]
     return Reply({"data": {"search_by_raw_query": {"search_timeline": {"timeline": {"instructions": instructions}}}}})
+
+
+def list_page(timeline_key: str, *entries: dict) -> Reply:
+    """A list's page whose `timeline_key` timeline lists `entries` in one `TimelineAddEntries` instruction."""
+    instructions = [{"type": "TimelineAddEntries", "entries": list(entries)}]
+    return Reply({"data": {"list": {timeline_key: {"timeline": {"instructions": instructions}}}}})
