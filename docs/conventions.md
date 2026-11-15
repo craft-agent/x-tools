@@ -882,6 +882,33 @@ and every entry point checks them the same way.
   a caller asks for needs them; a list or community named by id reads like
   any other.
 
+## Media downloads
+
+- **Only X's two media hosts are fetched**: `https://pbs.twimg.com` for
+  photos and `https://video.twimg.com` for videos and GIFs, on their default
+  port, and every redirect is checked against the same two. A post's media
+  URL comes from a source, so a URL elsewhere is refused before any request,
+  never fetched; a download cannot be steered to another host.
+- **A download carries no cookie and no credential**: a `User-Agent` and
+  nothing else, as for FxTwitter. The media are public files, and a cookie on
+  the request would hand the reading account's session to whoever answers.
+- **What is kept is what was asked for.** The served type must be an image
+  (`image/jpeg`, `image/png`, `image/webp` or `image/gif`) for a photo and
+  `video/mp4` for a video or GIF, and the file's extension comes from that
+  type, never from the URL. A file is at most 500 MB, refused from its
+  `Content-Length` before the body and counted while it arrives, and a body
+  shorter than its `Content-Length`, or empty, is a failure.
+- **A download has a time limit and a stall limit**: 5 minutes for the
+  whole download, redirects included, and 30 seconds without a byte. A large
+  video takes minutes, while a download that stops sending is a failure, not
+  a wait.
+- **A file appears whole or not at all.** The body is written to a hidden
+  part file beside its final name and linked to that name when it is complete
+  and checked; a failure, a refusal or an abort removes the part file. A link,
+  unlike a rename, fails on a name already taken, so a file already at the
+  final name is never written over: one that is a non-empty file is kept as
+  it is, and anything else there fails the download.
+
 ## Files
 
 - **Media are written only under the directory a setting names**, judged by
