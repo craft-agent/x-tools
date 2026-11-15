@@ -1,8 +1,8 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test"
-import { mkdirSync, mkdtempSync, rmSync, symlinkSync } from "node:fs"
+import { mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
-import { isWithin } from "./paths"
+import { isWithin, isWithinPlanned } from "./paths"
 
 let root: string
 
@@ -39,5 +39,42 @@ describe("isWithin", () => {
   test("a path that cannot be resolved is not within", async () => {
     expect(await isWithin(join(root, "missing"), join(root, "inside"))).toBe(false)
     expect(await isWithin(join(root, "inside"), join(root, "missing"))).toBe(false)
+  })
+})
+
+describe("isWithinPlanned", () => {
+  test("a path that does not exist yet is judged by its nearest existing ancestor", async () => {
+    const inside = join(root, "inside")
+    expect(await isWithinPlanned(join(inside, "new", "deeper"), inside)).toBe(true)
+    expect(await isWithinPlanned(join(inside, "new"), join(inside, "new"))).toBe(true)
+    expect(await isWithinPlanned(join(root, "outside", "new"), inside)).toBe(false)
+    expect(await isWithinPlanned(join(root, "new"), inside)).toBe(false)
+    expect(await isWithinPlanned(join(root, "inside-2", "new"), inside)).toBe(false)
+  })
+
+  test("the root may not exist yet either", async () => {
+    const planned = join(root, "outside", "state")
+    expect(await isWithinPlanned(join(planned, "downloads"), planned)).toBe(true)
+    expect(await isWithinPlanned(join(root, "outside", "other"), planned)).toBe(false)
+  })
+
+  test("a link in the part that exists is followed, so the missing part is judged where it leads", async () => {
+    symlinkSync(join(root, "inside"), join(root, "link"))
+    expect(await isWithinPlanned(join(root, "link", "new"), join(root, "inside"))).toBe(true)
+    expect(await isWithinPlanned(join(root, "link"), join(root, "inside", "deeper"))).toBe(false)
+    symlinkSync(join(root, "outside"), join(root, "inside", "escape"))
+    expect(await isWithinPlanned(join(root, "inside", "escape", "new"), join(root, "inside"))).toBe(false)
+  })
+
+  test("a file in the way is treated as missing below it", async () => {
+    writeFileSync(join(root, "file"), "")
+    expect(await isWithinPlanned(join(root, "file", "new"), join(root, "file"))).toBe(true)
+    expect(await isWithinPlanned(join(root, "file", "new"), join(root, "inside"))).toBe(false)
+  })
+
+  test("a failure other than absence rejects", async () => {
+    symlinkSync(join(root, "loop-b"), join(root, "loop-a"))
+    symlinkSync(join(root, "loop-a"), join(root, "loop-b"))
+    await expect(isWithinPlanned(join(root, "loop-a", "new"), join(root, "inside"))).rejects.toThrow()
   })
 })
