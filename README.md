@@ -151,7 +151,9 @@ plugins:
 
 ### Any other MCP host
 
-Add the server to the host's MCP configuration. Flags go in `args`:
+The server is listed in the MCP Registry as `io.github.craft-agent/x-tools`,
+for hosts that install from it. Otherwise, add the server to the host's MCP
+configuration. Flags go in `args`:
 
 ```json
 {
