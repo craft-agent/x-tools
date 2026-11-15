@@ -1,6 +1,6 @@
 # x-tools
 
-Unofficial, read-only X tools for coding agents: search, threads, profiles, media and post checks.
+Unofficial X tools for coding agents: read posts and profiles, save post media, never write to X.
 
 > [!WARNING]
 > These tools do not use the X API. They read through FxTwitter, a
@@ -300,6 +300,26 @@ through the reading account, paged. Each trend has its `name`, `rank`,
 lists trends for the place it places the reader in, so FxTwitter's and the
 reading account's may differ; `source` tells which answered.
 
+### Media (`media`)
+
+On by default. Saves a post's photos, videos and GIFs to the machine: the
+only tool that writes anything, and it never writes to X.
+
+| Tool               | What it does                                                                                                         | Class |
+| ------------------ | -------------------------------------------------------------------------------------------------------------------- | ----- |
+| `x_media_download` | save a post's photos at original size and its videos and GIFs as MP4 into `<download_dir>/<post id>/`, with `quoted` | add   |
+
+The post is read once through the sources, as `x_post_read` `view` reads it;
+the files then come only from `pbs.twimg.com` and `video.twimg.com`, without
+a cookie. A photo must be served as an image and a video or GIF as
+`video/mp4`, at most 500 MB, within 5 minutes and never 30 seconds without
+data; a file that fails a check is not kept, and none is ever half written.
+Files are named `<post id>-<n>.<ext>`, a quoted post's (`quoted: true`) with
+its own id. A file already there is kept and reported as `reused`, never
+overwritten. The approval prompt names the post and the folder; a download
+directory inside the state directory or the install directory is refused
+before it. A saved file is someone else's work, kept for your own use.
+
 ### Grants (`grants`)
 
 Off by default. Delegates bounded writes for jobs where no person can answer.
@@ -560,6 +580,7 @@ variable, and an option or setting wins over the variable too.
 | `fxtwitter_reads_per_day`    | `--fxtwitter-reads-per-day`    | `X_TOOLS_FXTWITTER_READS_PER_DAY`    | the most requests to FxTwitter in 24 hours; default 1000, 1 to 5000                                                 |
 | `fxtwitter_cooldown_seconds` | `--fxtwitter-cooldown-seconds` | `X_TOOLS_FXTWITTER_COOLDOWN_SECONDS` | how long FxTwitter is left alone after it answers 429 without a `Retry-After`; default 900, 60 to 21600             |
 | `account_only`               | `--account-only`               | `X_TOOLS_ACCOUNT_ONLY`               | reads go only to the reading account, never to FxTwitter; off by default                                            |
+| `download_dir`               | `--download-dir`               | `X_TOOLS_DOWNLOAD_DIR`               | where `x_media_download` saves media, one folder per post; default `~/Downloads/x-tools`                            |
 
 `X_TOOLS_GRANT_KEY` is a variable only, never a flag or a plugin
 option. Use at least 32 characters, for example from `openssl rand -hex 32`,
