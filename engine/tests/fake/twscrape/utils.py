@@ -1,4 +1,4 @@
-"""The fake utils: the two lookups of twscrape 0.21.0 that read a timeline's JSON, with the same contract."""
+"""The fake utils: the two lookups of twscrape 0.21.1 that read a timeline's JSON, with the same contract."""
 
 from typing import Any, Callable
 

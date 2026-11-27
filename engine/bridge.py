@@ -79,7 +79,7 @@ DETAIL_VARIABLES = {
 # The `referrer` twscrape sends with each reading (`tweet_replies_raw`, `tweet_thread_raw`).
 CONVERSATION_REFERRER = "tweet"
 THREAD_REFERRER = "profile"
-# The features `tweet_thread_raw` of twscrape 0.21.0 sends beside its defaults (twscrape keeps them inside the function).
+# The features `tweet_thread_raw` of twscrape 0.21.1 sends beside its defaults (twscrape keeps them inside the function).
 THREAD_FEATURES = {
     "rweb_video_screen_enabled": False,
     "profile_label_improvements_pcf_label_in_post_enabled": True,

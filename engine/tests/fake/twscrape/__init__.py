@@ -1,4 +1,4 @@
-"""A stand-in for twscrape 0.21.0 that mirrors only the surface the bridge uses, under the real names."""
+"""A stand-in for twscrape 0.21.1 that mirrors only the surface the bridge uses, under the real names."""
 
 from .accounts_pool import AccountsPool, NoAccountError
 from .api import API
