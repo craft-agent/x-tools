@@ -50,7 +50,7 @@ class TestProcess(BridgeTest):
                 env={**os.environ, "PYTHONPATH": str(FAKE)},
                 timeout=60,
             )
-        self.assert_ok(reply_of(process), {"twscrape_version": "0.21.0"}, contacted=False)
+        self.assert_ok(reply_of(process), {"twscrape_version": "0.21.1"}, contacted=False)
 
     def test_a_crash_before_a_reply_exits_non_zero_with_a_short_message(self):
         patch = "bridge.handle = lambda request: 1 / 0"

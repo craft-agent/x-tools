@@ -1,4 +1,4 @@
-"""The fake models: the fields of twscrape 0.21.0's `Tweet` and `User` and what they hold that the bridge reads, under its names."""
+"""The fake models: the fields of twscrape 0.21.1's `Tweet` and `User` and what they hold that the bridge reads, under its names."""
 
 from collections.abc import Generator
 from dataclasses import dataclass, field

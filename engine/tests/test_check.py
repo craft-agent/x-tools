@@ -9,14 +9,14 @@ from twscrape import api as fake_api
 class TestCheck(BridgeTest):
     def test_check_answers_ok_with_the_fingerprint_and_contacts_nothing(self):
         reply = handle(make_request("check"))
-        self.assert_ok(reply, {"twscrape_version": "0.21.0"}, contacted=False)
+        self.assert_ok(reply, {"twscrape_version": "0.21.1"}, contacted=False)
         self.assertEqual(reply["fingerprint"], FINGERPRINT)
         self.assertIsNone(reply["session"])
         self.assertEqual(reply["warnings"], [])
 
     def test_check_answers_ok_even_when_refused_equals_its_fingerprint(self):
         reply = handle(make_request("check", refused=FINGERPRINT))
-        self.assert_ok(reply, {"twscrape_version": "0.21.0"}, contacted=False)
+        self.assert_ok(reply, {"twscrape_version": "0.21.1"}, contacted=False)
         self.assertEqual(reply["fingerprint"], FINGERPRINT)
 
     def test_check_builds_no_pool(self):
@@ -52,7 +52,7 @@ class TestWithoutTwscrape(BridgeTest):
 
     def test_check_through_the_subprocess_reports_the_version(self):
         reply = reply_of(run_bridge(make_request("check")))
-        self.assert_ok(reply, {"twscrape_version": "0.21.0"}, contacted=False)
+        self.assert_ok(reply, {"twscrape_version": "0.21.1"}, contacted=False)
 
 
 if __name__ == "__main__":

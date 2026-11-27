@@ -12,7 +12,7 @@ import { ensurePrivateDir } from "./private-dir"
 export const PYTHON_VERSION = "3.12.13"
 
 /** The twscrape release the engine runs; `engine/requirements.in` and `engine/requirements.lock` pin the same one. */
-export const TWSCRAPE_VERSION = "0.21.0"
+export const TWSCRAPE_VERSION = "0.21.1"
 
 /** Where the engine lives under a state root. */
 export type EnginePaths = {
