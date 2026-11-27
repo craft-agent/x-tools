@@ -52,6 +52,17 @@ class TestSession(BridgeTest):
         self.assertTrue(locks["UserTweets"].endswith("+00:00"))
         self.assertGreater(until.timestamp(), datetime.now().timestamp() + 500)
 
+    def test_an_inactive_session_reports_no_locks(self):
+        reply = handle(make_request(args={"locks": {"SearchTimeline": 900}, "inactive": "Logged-out X web app"}))
+        self.assertEqual(reply["session"], {"active": False, "error": "Logged-out X web app", "locks": {}})
+
+    def test_an_inactive_session_reports_no_locks_after_no_account(self):
+        args = {"locks": {"SearchTimeline": 900}, "inactive": "Logged-out X web app", "raise": "NoAccountError"}
+        reply = handle(make_request(args=args))
+        self.assert_failure(reply, "no_account", contacted=True)
+        self.assertEqual(reply["session"]["locks"], {})
+        self.assertFalse(reply["session"]["active"])
+
     def test_the_session_is_reported_after_a_failure(self):
         reply = handle(make_request(args={"locks": {"UserTweets": 600}, "raise": "NoAccountError"}))
         self.assertEqual(list(reply["session"]["locks"]), ["UserTweets"])

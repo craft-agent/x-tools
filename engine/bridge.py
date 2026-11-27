@@ -363,7 +363,12 @@ def future_locks(account: Any) -> dict[str, str]:
 
 
 async def session_report(api: Any) -> dict | None:
-    """What twscrape made of the session: active or not, its error, and the locks still ahead; None when unreadable."""
+    """What twscrape made of the session: active or not, its error, and the locks still ahead; None when unreadable.
+
+    An inactive session reports no locks. twscrape locks an account for its queue when it takes it
+    and does not unlock it when it marks it inactive, so such a lock is twscrape's own, never a rate
+    limit X set: a rate limit leaves the account active.
+    """
     try:
         accounts = await api.pool.get_all()
     except Exception:
@@ -371,8 +376,9 @@ async def session_report(api: Any) -> dict | None:
     if not accounts:
         return {"active": False, "error": "the pool holds no account", "locks": {}}
     account = accounts[0]
+    active = bool(account.active)
     error = None if account.error_msg in (None, "None", "") else safe(account.error_msg, SESSION_ERROR_LIMIT)
-    return {"active": bool(account.active), "error": error, "locks": future_locks(account)}
+    return {"active": active, "error": error, "locks": future_locks(account) if active else {}}
 
 
 # Operations
